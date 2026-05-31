@@ -1,0 +1,594 @@
+You are designing the complete Figma prototype for MAGRO — a Mali AgriTech mobile app (+ web admin dashboard) that connects farmers and buyers. The app has 3 completely separate interfaces: Farmer, Buyer, and Admin. Each user sees only their own interface after login.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎨 PART 1 — DESIGN SYSTEM (apply to ALL screens)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+COLORS:
+- Primary Green: #2E7D32
+- Primary Orange: #F57C00
+- Light Green (surface): #E8F5E9
+- Light Orange (surface): #FFF3E0
+- Background: #FAFAFA
+- Card: #FFFFFF
+- Text primary: #1A1A1A
+- Text secondary: #757575
+- Border: #E0E0E0
+- Error: #D32F2F
+- Success: #388E3C
+
+TYPOGRAPHY: Inter / Noto Sans
+- H1: 24px Bold | H2: 20px SemiBold | H3: 16px SemiBold
+- Body: 14px Regular | Caption: 12px Regular | Button: 16px SemiBold
+
+COMPONENTS (reuse across all screens):
+- Primary button: orange #F57C00, full width, 56px height, 12px radius
+- Secondary button: green #2E7D32 outline
+- Ghost button: text only, no border
+- Input field: 56px height, border #E0E0E0, active border #2E7D32, 8px radius
+- OTP input: 6 boxes, 48x56px each, 8px radius, bold center text
+- Badges: 🟡 Gold (≥80/100) | ⚪ Silver (60–79/100) | 🟢 Green (identity verified)
+- Status chips: pending=orange | confirmed=blue | in_production=purple | ready=teal | delivered=green | cancelled=gray | disputed=red
+- Card: white, 12px radius, shadow 0 2px 8px rgba(0,0,0,0.08)
+- Bottom nav bar: 5 tabs, active tab colored (green for farmer, orange for buyer)
+- Top app bar: back arrow + title + optional right icon
+- Avatar: circle with initials fallback
+- Star rating: 5 stars component
+- Progress steps: horizontal stepper for onboarding
+- Toast: success/error/warning banners
+- FAB: orange circle, + icon, bottom right
+
+LOGO: "MAGRO 🥭" — flat design, no shadow, no 3D, no gradient. Primary text in #2E7D32. Mango emoji inline. Clean, centered, minimal.
+
+STYLE: Clean, modern, accessible. Large touch targets (min 48px). High contrast. Designed for low-tech users in rural Mali.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📱 PART 2 — SHARED SCREENS (Auth & Onboarding)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCREEN A1 — SPLASH
+- Green background #2E7D32
+- MAGRO logo centered (white version, flat)
+- Tagline below: "Cultiver pour vendre 🥭" in white
+- Auto-redirect after 2s
+
+SCREEN A2 — WELCOME
+- White background
+- MAGRO logo top center
+- Simple flat illustration: farmer and buyer connected by phone/app
+- Title: "Bienvenue sur MAGRO"
+- Subtitle: "La plateforme qui connecte producteurs et acheteurs au Mali"
+- Button 1: "Je m'inscris" (orange, primary, full width)
+- Button 2: "J'ai déjà un compte" (green outline, full width)
+
+SCREEN A3 — REGISTER: PHONE NUMBER
+- Top: MAGRO logo + step indicator 1/5
+- Title: "Votre numéro de téléphone"
+- Subtitle: "Nous vous enverrons un code de vérification par SMS"
+- Phone input field with Mali flag prefix (+223)
+- "Continuer" orange button
+- Divider "ou"
+- "Continuer avec Google" white button with Google icon
+
+SCREEN A4 — OTP VERIFICATION
+- Step indicator 2/5
+- Title: "Code de vérification"
+- Subtitle: "Code envoyé au +223 XXXXXXXX"
+- 6 OTP boxes centered
+- "Vérifier" orange button
+- "Renvoyer le code" ghost link with 60s countdown timer
+- "Modifier le numéro" back link
+
+SCREEN A5 — FULL NAME
+- Step indicator 3/5
+- Title: "Votre nom complet"
+- Single text input "Nom et prénom"
+- "Continuer" orange button
+
+SCREEN A6 — USER TYPE SELECTION
+- Step indicator 4/5
+- Title: "Vous êtes..."
+- Two large cards, full width, vertically stacked:
+  Card 1: 🌱 "Producteur / Agriculteur" — "Je vends ma production" — green left border when selected
+  Card 2: 🛒 "Acheteur / Client" — "J'achète des produits agricoles" — orange left border when selected
+- "Continuer" button activates only when one selected
+
+SCREEN A7 — BUYER SUBTYPE (only if Buyer chosen)
+- Step indicator 4b/5
+- Title: "Quel type d'acheteur ?"
+- 5 selectable cards with icons:
+  🛒 Particulier | 🏪 Commerçant / Grossiste | 🍽️ Restaurateur / Hôtelier | 🏫 Cantine / Institution | 🏭 Industrie
+- Each card: large icon, bold label, 1-line description
+- Green border + checkmark when selected
+
+SCREEN A8 — REGION SELECTION
+- Step indicator 5/5
+- Title: "Votre région au Mali"
+- Scrollable grid of region chips:
+  Kayes | Koulikoro | Sikasso | Ségou | Mopti | Tombouctou | Gao | Kidal | District de Bamako
+- Selected chip: filled green/orange
+- "Terminer l'inscription" button
+
+SCREEN A9 — NOTIFICATIONS PERMISSION
+- Bell icon illustration (large, centered)
+- Title: "Restez informé"
+- Subtitle: "Recevez des alertes sur vos commandes et produits disponibles"
+- "Autoriser les notifications" orange button
+- "Plus tard" ghost button
+
+SCREEN A10 — LOGIN (returning user)
+- MAGRO logo top center
+- Title: "Bon retour 👋"
+- Phone number input with Mali flag
+- "Recevoir le code SMS" orange button
+- "Pas encore de compte ? S'inscrire" link at bottom
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🌱 PART 3 — FARMER INTERFACE (Green #2E7D32 primary)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Bottom nav (5 tabs, green active): 🏠 Accueil | 📋 Annonces | 📦 Commandes | 💬 Messages | 👤 Profil
+
+SCREEN F1 — FARMER DASHBOARD (Home)
+- Top bar: avatar + "Bonjour, [Nom] 👋" + notification bell with badge
+- 3 summary cards in a row:
+  "En attente" (number, orange) | "En séquestre" (FCFA amount, green) | "Annonces actives" (number, blue)
+- Quick actions section (2x2 grid of icon buttons):
+  + Publier une annonce | Voir commandes | Demander certification | Mes revenus
+- Section "Commandes récentes" (last 3 orders):
+  Each: crop name + buyer name + quantity kg + status chip + arrow
+- Bottom navigation
+
+SCREEN F2 — MY LISTINGS
+- Header: "Mes annonces" + orange FAB "+"
+- Filter tabs: Toutes | Publiées | Brouillons | Épuisées
+- Listing cards (list view):
+  Product image left | Crop name + badge icon | Remaining stock bar "340kg / 500kg" | Price FCFA/kg | Date range | Status chip | Edit icon
+- Empty state: illustration + "Publiez votre première annonce"
+
+SCREEN F3 — CREATE LISTING
+- Title: "Nouvelle annonce" + back arrow
+- Form fields (all with labels above):
+  "Culture" — dropdown (tomate, oignon, mangue, pomme de terre, salade, arachide, maïs, riz...)
+  "Quantité estimée" — number input with "kg" suffix
+  "Prix unitaire" — number input with "FCFA/kg" suffix
+  "Disponible du" — date picker
+  "Disponible jusqu'au" — date picker (hint: "minimum 7 jours à partir d'aujourd'hui")
+  "Région de production" — dropdown
+  "Photos du produit" — 4-slot image upload grid (tap to add)
+  "Demander une certification qualité" — toggle switch
+    If toggle ON: info card "5 000 – 15 000 FCFA selon la culture. Un expert viendra inspecter votre production."
+- Bottom: "Publier l'annonce" orange button + "Enregistrer en brouillon" outline button
+
+SCREEN F4 — INCOMING ORDERS
+- Title: "Commandes reçues"
+- Filter tabs: En attente 🔴 | Confirmées | En production | Prêtes | Livrées
+- Order cards:
+  Buyer avatar + name + buyer type badge | Crop + quantity | Total price | Delivery date | Status chip
+  For PENDING cards: countdown "⏳ 47h restantes" + two action buttons "Accepter ✓" (green) and "Refuser ✗" (red outline), full width
+
+SCREEN F5 — ORDER DETAIL (Farmer view)
+- Back arrow + "Commande #MAG-0042"
+- Buyer info card: avatar, name, type, rating, verified badge
+- Order details: crop, quantity ordered, unit price, total, delivery date
+- Vertical progress timeline:
+  ● En attente → ● Confirmée → ● En production → ● Prête → ● Livrée
+  (current step highlighted green with filled circle)
+- Payment card: "Séquestre: 245 000 FCFA 🔒" + "Libéré après confirmation acheteur"
+- If deposit paid: "Acompte reçu: 73 500 FCFA ✓"
+- Action button changes by status:
+  Pending → "Accepter" + "Refuser"
+  Confirmed → "Marquer en production"
+  In production → "Marquer comme prêt — Notifier l'acheteur"
+  Ready → "En attente de confirmation acheteur (72h max)"
+- "Envoyer un message" secondary button
+- "Signaler un problème" red text link (only for confirmed+ status)
+
+SCREEN F6 — CERTIFICATION REQUEST
+- Title: "Certification qualité MAGRO"
+- Info section: 3 badge cards:
+  🟢 Vert: Identité vérifiée (gratuit)
+  ⚪ Argent: Score 60–79/100 (payant)
+  🟡 Or: Score ≥ 80/100 (payant)
+- Scoring criteria (horizontal bars with labels):
+  Aspect visuel 30% | Maturité/Brix 25% | Stockage & hygiène 20% | Pratiques culturales 15% | Traçabilité 10%
+- "Culture à certifier" dropdown
+- Fee display: "5 000 – 15 000 FCFA selon la culture"
+- "Moyen de paiement" two buttons: Orange Money | Wave
+- "Soumettre la demande" orange button
+- Note: "Un expert MAGRO proche de votre région sera assigné"
+
+SCREEN F7 — EARNINGS / REVENUE
+- Title: "Mes revenus"
+- Month selector (← Avril 2026 →)
+- Total earned card: big number + "ce mois"
+- 3 metric cards: En séquestre 🔒 | Libérés ✓ | Commission MAGRO déduite
+- Bar chart: last 6 months earnings (simple, clean)
+- Transaction history list:
+  Each item: Order ref | Crop | Amount | Date | Status chip (séquestre / libéré / remboursé)
+
+SCREEN F8 — FARMER PROFILE
+- Cover area: green gradient header
+- Avatar circle (centered, overlapping header) + name below + "Producteur" tag
+- Verified badge row: 🟢 Identité vérifiée
+- Region + "Membre depuis [date]"
+- Stats row: [Total ventes FCFA] | [Commandes] | [Annonces actives]
+- Rating: ★★★★☆ 4.2 — "96% de livraisons conformes" (green progress bar)
+- Badges section: "Mes certifications"
+  Chips: 🟡 Or — Tomates | ⚪ Argent — Oignons | (+ Demander pour d'autres)
+- Menu list items with chevrons:
+  ✏️ Modifier le profil
+  🪪 Vérification d'identité (with status badge)
+  🏅 Mes certifications
+  ⭐ Avis reçus
+  💰 Abonnement premium
+  🔔 Notifications
+  🚪 Déconnexion (red)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🛒 PART 4 — BUYER INTERFACE (Orange #F57C00 primary)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Bottom nav (5 tabs, orange active): 🏠 Accueil | 🔍 Explorer | 📦 Commandes | 💬 Messages | 👤 Profil
+
+SCREEN B1 — BUYER HOME
+- Top bar: location pin "Bamako ▾" + search icon + notification bell
+- Hero search bar: "Rechercher une culture, un producteur..." + filter icon
+- "Produits certifiés 🟡" horizontal scroll section (cards with gold badge)
+- Category chips row (scrollable): 🍅 Tomates | 🧅 Oignons | 🥭 Mangues | 🥔 Pommes de terre | 🥬 Salades | Voir tout →
+- Listings feed (2-column grid):
+  Each card: product photo | crop name | badge icon | farmer name + region | price FCFA/kg | "Dispo: [date]" | stock bar
+- Orange promo banner: "🌟 MAGRO Pro — Alertes prioritaires 2h avant tout le monde"
+
+SCREEN B2 — SEARCH & FILTER
+- Search bar (active, with cursor)
+- Recent searches chips
+- Filter bottom sheet (slide up panel):
+  "Culture" — multi-select chips
+  "Région" — dropdown
+  "Prix maximum" — slider (0 to 5000 FCFA/kg)
+  "Note producteur minimum" — 1 to 5 star selector
+  "Badge qualité" — checkboxes: 🟡 Or | ⚪ Argent | 🟢 Vérifié
+  "Certifiés uniquement" — toggle (premium lock icon shown for free users)
+  "Période disponibilité" — date range picker
+- "Appliquer les filtres" orange button + "Réinitialiser" ghost link
+
+SCREEN B3 — LISTING DETAIL
+- Image carousel (swipeable, 4 images with dot indicator)
+- Crop name H1 + badge prominent (🟡 Or | ⚪ Argent | 🟢)
+- Price: "1 200 FCFA / kg" large + "500 kg disponibles"
+- Availability: "Du 15 mai au 30 juin 2026"
+- Farmer profile card (tappable):
+  Avatar | Name | ★★★★☆ 4.3 (18 avis) | "96% livraisons conformes" | 🟢 Identité vérifiée | [🤝 Partenaire de confiance — if applicable]
+- Certification detail (if certified): expandable section with score bar 84/100 + criteria breakdown
+- "🔔 Activer une alerte" outline button
+- Order section:
+  Quantity input (kg) with - + buttons
+  Total auto-calculated below: "= 36 000 FCFA"
+  Risk/deposit info card (if applicable):
+    ⚠️ "Acompte de 30% requis — 10 800 FCFA" with brief reason
+    or ✅ "Partenaires de confiance — aucun acompte" (green)
+- "Commander" big orange button
+
+SCREEN B4 — PLACE ORDER
+- Title: "Confirmer la précommande"
+- Order summary card: crop | quantity | unit price | total price | delivery date
+- Deposit section (if applicable):
+  Yellow info card: "⚠️ Acompte requis: 30% = 10 800 FCFA"
+  Explanation: "Versé maintenant. Solde de 25 200 FCFA à la livraison."
+  Reason shown (e.g. "Montant > 500 000 FCFA")
+- Info banner (green): "Aucun paiement débité avant confirmation du producteur (48h maximum)"
+- "Confirmer la précommande" orange button
+
+SCREEN B5 — MY ORDERS
+- Title: "Mes commandes"
+- Filter tabs: En attente | Confirmées | En production | Prêtes 🟢 | Livrées | Litiges 🔴
+- Order cards:
+  Farmer avatar + name | Crop + quantity | Total price | Status chip | Delivery date
+  For PRÊTE cards: "✓ Confirmer la réception" green button prominent + "72h restantes" countdown
+
+SCREEN B6 — CONFIRM OR DISPUTE DELIVERY
+- Title: "Réception de la commande"
+- Order summary at top
+- Two large option cards:
+  Card 1 (green): ✅ "Tout est conforme" — "Valider la livraison et libérer le paiement"
+  Card 2 (red outline): ⚠️ "Signaler un problème" — "Geler les fonds et ouvrir un litige"
+- If "Signaler un problème" tapped, expand form:
+  Problem type radio: Non-livraison | Quantité incorrecte | Qualité non conforme | Autre
+  Description text area (required)
+  "Ajouter des photos" upload (up to 5)
+  "Ouvrir le litige" red button
+
+SCREEN B7 — AVAILABILITY ALERTS
+- Title: "Mes alertes"
+- Active alerts list:
+  Each item: crop icon + name | region (or "Toutes régions") | toggle on/off | 🌟 Pro badge if premium
+- "Créer une alerte" FAB (orange +)
+- Create alert bottom sheet:
+  Crop dropdown | Region optional dropdown | "Me notifier dès qu'une annonce est publiée" checkbox
+  Premium callout: "⭐ Abonnez-vous Pro pour être notifié 2h avant tout le monde"
+  "Enregistrer l'alerte" orange button
+
+SCREEN B8 — BUYER PROFILE
+- Header with orange accent
+- Avatar + name + buyer type badge (e.g. "Restaurateur")
+- Region + member since
+- Stats: [Commandes passées] | [Total dépensé FCFA] | [Partenaires de confiance]
+- Trusted partners section: avatars of trusted farmers with 🤝 badge
+- Menu items:
+  ✏️ Modifier le profil
+  🪪 Vérification d'identité
+  ⭐ Abonnement MAGRO Pro
+  🔔 Alertes de disponibilité
+  📋 Historique & Factures
+  💬 Messages
+  [INDUSTRIE ONLY] 📄 Mes contrats saisonniers
+  🚪 Déconnexion (red)
+
+SCREEN B9 — SEASONAL CONTRACT (Industry only)
+- Title: "Nouveau contrat saisonnier"
+- Progress: Step 1/4 → 2/4 → 3/4 → 4/4
+- Step 1 — Select farmer: search bar + list of trusted farmers
+- Step 2 — Contract details:
+  Crop dropdown | Total quantity (kg/tonnes) | Price per kg | Season start/end dates
+  "Co-financer une certification qualité ?" toggle
+- Step 3 — Delivery schedule:
+  Add delivery slots: [date] [quantity kg] + "Add" button
+  Visual timeline of deliveries
+- Step 4 — Summary + "Soumettre le contrat" orange button
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💬 PART 5 — SHARED: MESSAGING & NOTIFICATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCREEN M1 — MESSAGE LIST
+- Search bar "Rechercher une conversation..."
+- Conversation items:
+  Avatar | Name + user type icon | Last message preview | Timestamp | Unread count badge
+  Order tag below name: "#MAG-0042 — Tomates"
+
+SCREEN M2 — CONVERSATION
+- Top bar: back + contact avatar + name + order tag chip
+- Pinned mini order card: status chip + "Voir la commande" link
+- Chat bubbles:
+  Sent: right, orange background
+  Received: left, light gray background
+  System messages: centered italic gray text — e.g. "✓ Commande confirmée", "📦 Produit marqué prêt"
+- Input bar: text field + 📎 attachment + send button (orange)
+
+SCREEN N1 — NOTIFICATIONS CENTER
+- Title: "Notifications"
+- Filter chips: Toutes | Commandes | Certifications | Alertes | Paiements
+- Notifications grouped by date (Aujourd'hui / Hier / Cette semaine):
+  🟢 "Votre commande a été confirmée par [farmer]" (green icon)
+  🟡 "Produit certifié disponible dans votre région" (gold icon + ⭐ PRO tag)
+  🟠 "Votre badge Or expire dans 7 jours" (warning orange)
+  💚 "Fonds libérés — 245 000 FCFA reçus ✓" (money icon)
+  🔴 "Litige ouvert sur commande #MAG-0039" (red icon)
+- Each item tappable → navigates to relevant screen
+- "Tout marquer comme lu" top right text button
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💳 PART 6 — SHARED: PAYMENTS & SUBSCRIPTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCREEN P1 — PAYMENT METHOD
+- Title: "Choisir le moyen de paiement"
+- Amount summary card at top: "À payer: 73 500 FCFA"
+- 2 large selectable cards:
+  🟠 Orange Money — logo + "Paiement par SMS ou application Orange"
+  💙 Wave — logo + "Paiement instantané Wave"
+- Selected card: colored border + checkmark
+- "Payer 73 500 FCFA" orange button
+
+SCREEN P2 — PAYMENT SUCCESS
+- Green circle checkmark animation (centered)
+- "Paiement reçu ✓"
+- Order reference: "#MAG-0042"
+- Escrow diagram (simple 3-step):
+  [Acheteur] → [Séquestre MAGRO 🔒] → [Producteur après livraison]
+- "Les fonds seront libérés après confirmation de la livraison"
+- "Suivre ma commande" orange button
+
+SCREEN P3 — BUYER PRO SUBSCRIPTION
+- Title: "MAGRO Pro"
+- Toggle: Mensuel / Annuel (-20%)
+- Two plan cards side by side:
+  Gratuit (0 FCFA) | Pro (5 000–15 000 FCFA/mois)
+  Features comparison with ✓ / ✗:
+  Parcourir les annonces ✓/✓
+  Passer des commandes ✓/✓
+  Filtre "Certifiés uniquement" ✗/✓
+  Alertes prioritaires 2h avant ✗/✓
+  Stats prix du marché ✗/✓
+  Support prioritaire ✗/✓
+- "Choisir Pro" orange button
+- "Continuer gratuitement" ghost link
+
+SCREEN P4 — FARMER PREMIUM SUBSCRIPTION
+- Title: "Compte Premium Producteur"
+- Mensuel / Annuel toggle
+- Plan comparison (Gratuit vs Premium — 3 000–10 000 FCFA/mois):
+  Annonces actives: 5 / Illimitées ✓
+  Mise en avant résultats ✗ / ✓
+  Badge prioritaire ✗ / ✓
+  Stats avancées ✗ / ✓
+  Support prioritaire ✗ / ✓
+- "Passer Premium" orange button
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚖️ PART 7 — SHARED: DISPUTES, REVIEWS & VERIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCREEN D1 — OPEN DISPUTE
+- Title: "Signaler un problème"
+- Order reference card at top
+- Problem type (large radio cards with icons):
+  📦 Non-livraison | ⚖️ Quantité incorrecte | 🍅 Qualité non conforme | 🚫 Autre
+- Description text area (required, "Décrivez le problème en détail...")
+- Evidence upload: "Ajouter des photos / documents" (5-slot grid)
+- Warning banner (red): "⚠️ Les fonds seront gelés pendant l'instruction du litige"
+- "Soumettre le litige" red button
+
+SCREEN D2 — DISPUTE STATUS
+- Title: "Litige #LIT-0021"
+- Status stepper: Ouvert → En instruction → Preuves soumises → Décision rendue
+- Parties cards: Your info (left) vs Other party (right)
+- Evidence section: Your evidence (visible) | Opposing evidence (blurred until decision)
+- Moderator card: avatar + name + "Assigné le [date]"
+- Countdown: "⏳ 2j 14h pour soumettre des preuves supplémentaires"
+- Decision card (when resolved):
+  Outcome chip (green/red/orange) + Amount released/refunded + Moderator note
+  "Contester la décision" red text link (only if new evidence)
+
+SCREEN R1 — POST-DELIVERY REVIEW
+- Title: "Évaluer cette transaction"
+- Reviewed party card (farmer or buyer, depending on who's reviewing)
+- 4 rating rows with star selectors (1–5):
+  Qualité du produit | Quantité conforme | Respect des délais | Communication
+- Comment field: optional, "Partagez votre expérience..."
+- "Publier l'avis" orange button + "Passer" ghost button
+
+SCREEN V1 — IDENTITY VERIFICATION
+- Title: "Vérification d'identité"
+- Progress stepper: 1. Documents → 2. Vérification → 3. Confirmé
+- Step 1 — Upload zone cards:
+  For farmer: "Pièce d'identité" (tap to upload) + "Photo de votre parcelle" + "📍 Localisation GPS" (auto-detect button)
+  For buyer pro: "Pièce d'identité" + "Justificatif d'activité commerciale"
+- Step 3 — Success state:
+  Green checkmark illustration
+  "Dossier envoyé avec succès"
+  "Délai de traitement: 5 jours ouvrés"
+- Status card if already submitted:
+  Pending: 🟡 "En cours de vérification"
+  Approved: 🟢 "Identité vérifiée ✓"
+  Rejected: 🔴 "Rejeté — [motif]" + "Re-soumettre" button
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🖥️ PART 8 — ADMIN WEB DASHBOARD (desktop layout)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Layout: Left sidebar (240px) + main content area. Desktop/tablet. 3 roles: Super Admin (full access), Moderator (disputes + accounts), Analyst (read-only stats).
+
+SCREEN ADM1 — ADMIN LOGIN
+- Centered card on dark green background
+- MAGRO logo white
+- Email + password inputs
+- "Se connecter" green button
+- Role-based auto-redirect after login
+
+SCREEN ADM2 — SUPER ADMIN DASHBOARD
+LEFT SIDEBAR:
+  MAGRO logo | Divider
+  📊 Vue d'ensemble (active)
+  ⚖️ Litiges [badge: 7]
+  👥 Vérifications [badge: 12]
+  🏅 Experts MAGRO
+  📈 Statistiques
+  📤 Exports
+  🔑 Clés API institutionnelles
+  ⚙️ Paramètres
+  (Super Admin only section:) 🔴 Sanctions sévères
+
+MAIN AREA — KPI cards row:
+  "Transactions aujourd'hui: 4 250 000 FCFA" (green)
+  "Commandes en cours: 143" (blue)
+  "Litiges ouverts: 7" (red if >5)
+  "Utilisateurs actifs: 312" (purple)
+  "Revenus MAGRO: 212 500 FCFA" (orange)
+
+Recent activity feed below KPIs
+
+SCREEN ADM3 — DISPUTES KANBAN
+- Kanban board, 5 columns with horizontal scroll:
+  🆕 Nouveau | 🔍 En instruction | ⏳ Preuves attendues | 🔄 Ré-inspection | ✅ Résolu
+
+Each dispute card:
+  Dispute ID | Amount in FCFA (bold red if >1 000 000 FCFA) | Farmer vs Buyer names | Days open counter | Certification badge if relevant | Assigned moderator avatar (or "Non assigné" tag)
+
+Dispute detail RIGHT PANEL (slide in on click):
+  Full timeline (order history + dispute events)
+  Evidence section: 2 columns — Preuves agriculteur | Preuves acheteur (photo thumbnails + text)
+  Certification report link (if product was certified)
+  Decision panel:
+    Label: "Rendre une décision"
+    Radio options:
+      ✅ Libération totale (100% → farmer)
+      🔄 Remboursement total (100% → buyer)
+      ⚖️ Split — ratio slider [Agriculteur: 70% ↔ Acheteur: 30%]
+      🔍 Ré-inspection (recall expert)
+      📦 Remboursement partiel
+    Decision note text area (required)
+    "Confirmer la décision" button — grayed out if amount >1M and user is Moderator (shows "Requiert Super Admin")
+
+SCREEN ADM4 — VERIFICATION QUEUE
+- Title: "Dossiers de vérification"
+- Filter bar: All | Agriculteur | Acheteur | Coopérative | Expert | Industrie | Status: En attente / En revue / Approuvé / Rejeté
+- Table columns: Name | Profile type | Region | Submitted date | Documents | Status chip | Actions
+- Row expand → shows uploaded documents (thumbnails) + notes field
+- Actions per row: "Approuver ✓" green | "Rejeter ✗" red (opens modal requiring rejection reason text)
+- Warning banner at top: "⚠️ 3 dossiers en attente depuis plus de 5 jours ouvrés" (red)
+
+SCREEN ADM5 — EXPERTS DASHBOARD
+- Title: "Experts MAGRO"
+- Expert cards grid (or table with expandable rows):
+  Expert name + photo | Region(s) | Crop specialties | Certifications this month / total | Avg score given | Contestation rate % (red badge if >20%) | Revenue generated | Status: Active / Suspended
+- Actions: "Voir le détail" | "Suspendre" (red) | "Définir zones d'intervention"
+- Top warning: "⚠️ 1 expert avec taux de contestation > 20% — Revue obligatoire"
+
+SCREEN ADM6 — STATISTICS (3 tabs)
+TAB 1 — Opérationnel:
+  Line chart: transaction volume over time (selectable: 7j / 30j / 6m / 1an)
+  Bar chart: orders by status distribution
+  Gauge meter: "Taux résolution litiges: 87%" (green if >80%)
+  Pie chart: revenue breakdown (commissions / certifications / abonnements)
+
+TAB 2 — Qualité:
+  Stacked bar: badge distribution by region (Gold/Silver/Green)
+  Line chart: avg certification score trend
+  Horizontal bar: delivery rate by region
+  Table: Top 10 certified crops
+
+TAB 3 — Croissance:
+  Line chart: new users per week (two lines: farmers vs buyers)
+  Metric card: retention rate
+  Bar chart: avg order value by buyer type (Particulier / Commerçant / Restaurateur / Institution / Industrie)
+  Table: Top 10 farmers by total volume sold
+
+SCREEN ADM7 — EXPORT & API KEYS
+- Title: "Exports institutionnels & Clés API"
+- API Keys table: Partner name | Quota/day | Last used | Status active/revoked | Created by | Actions (Activate / Revoke) — Super Admin only
+- "Créer une nouvelle clé API" green button (Super Admin only)
+- Export section:
+  Preset options as cards:
+    📊 Évolution des prix par culture/région
+    🏅 Scores de certification agrégés
+    📦 Volumes de production par saison
+    🗺️ Flux commerciaux anonymisés
+  Date range picker + Region filter
+  Format: CSV / JSON toggle
+  "Générer l'export" orange button
+- Note: "Toutes les données exportées sont anonymisées — aucune donnée nominative"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📐 FIGMA ORGANIZATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Organize all screens into these Figma pages:
+1. 🎨 Design System
+2. 🔐 Auth & Onboarding (A1–A10)
+3. 🌱 Farmer App (F1–F8)
+4. 🛒 Buyer App (B1–B9)
+5. 💬 Messages & Notifications (M1, M2, N1)
+6. 💳 Payments & Subscriptions (P1–P4)
+7. ⚖️ Disputes, Reviews & Verification (D1, D2, R1, V1)
+8. 🖥️ Admin Dashboard (ADM1–ADM7)
+
+Frame size: 390x844px for all mobile screens (iPhone 14 standard).
+Admin dashboard: 1440x900px (desktop).
+Connect screens with Figma prototype arrows to show complete user flows.
+Label each frame clearly with its screen code (e.g. "F3 — Create Listing").
+
+Mobile screens: Green #2E7D32 primary for Farmer, Orange #F57C00 primary for Buyer.
+Admin: Green sidebar, white content area, orange CTAs.
+All designs: flat, clean, accessible, high contrast. Zero shadows on logo. Zero 3D effects. Designed for users in rural Mali with large touch targets.

@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  BUYER
+  FARMER
+  REGULATOR
+}
+
+model User {
+  id            String         @id @default(uuid())
+  phone         String         @unique
+  name          String
+  role          UserRole       @default(BUYER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+  listings      Listing[]
+  orders        Order[]        @relation("BuyerOrders")
+  auditLogs     AuditLog[]
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  token      String   @unique
+  expiresAt  DateTime
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  createdAt  DateTime @default(now())
+}
+
+model Listing {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  price       Int
+  quantity    Int
+  unit        String   @default("kg")
+  region      String
+  image       String
+  farmer      User     @relation(fields: [farmerId], references: [id])
+  farmerId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orders      Order[]
+}
+
+model Order {
+  id         String   @id @default(uuid())
+  buyer      User     @relation("BuyerOrders", fields: [buyerId], references: [id])
+  buyerId    String
+  listing    Listing  @relation(fields: [listingId], references: [id])
+  listingId  String
+  quantity   Int
+  totalPrice Int
+  status     String   @default("EN_ATTENTE")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model LoginOtp {
+  id         String   @id @default(uuid())
+  phone      String
+  codeHash   String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
