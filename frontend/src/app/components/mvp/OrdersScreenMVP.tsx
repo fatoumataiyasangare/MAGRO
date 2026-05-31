@@ -1,12 +1,14 @@
+import { useEffect, useState } from "react";
 import { ArrowLeft, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { motion } from "motion/react";
+import { fetchFarmerOrders, FarmerOrder } from "../../../services/orders";
 
 interface Order {
   id: string;
   crop: string;
   buyer: string;
   quantity: string;
-  status: "Confirmée" | "Prête" | "En attente";
+  status: "Confirmée" | "Prête" | "En attente" | string;
   date: string;
   price?: string;
 }
@@ -15,36 +17,65 @@ interface OrdersScreenMVPProps {
   onBack: () => void;
 }
 
+function formatStatus(status: string) {
+  switch (status) {
+    case "EN_ATTENTE":
+      return "En attente";
+    case "CONFIRMEE":
+    case "CONFIRMED":
+      return "Confirmée";
+    case "PRETE":
+      return "Prête";
+    default:
+      return status;
+  }
+}
+
+function formatPrice(value: number) {
+  return `${new Intl.NumberFormat("fr-FR").format(value)} FCFA`;
+}
+
 export default function OrdersScreenMVP({ onBack }: OrdersScreenMVPProps) {
-  const orders: Order[] = [
-    {
-      id: "1",
-      crop: "Tomates",
-      buyer: "Amadou K.",
-      quantity: "50 kg",
-      status: "Confirmée",
-      date: "28 Mai 2026",
-      price: "25,000 FCFA"
-    },
-    {
-      id: "2",
-      crop: "Oignons",
-      buyer: "Fatoumata D.",
-      quantity: "100 kg",
-      status: "Prête",
-      date: "27 Mai 2026",
-      price: "15,000 FCFA"
-    },
-    {
-      id: "3",
-      crop: "Pommes de terre",
-      buyer: "Ibrahim S.",
-      quantity: "75 kg",
-      status: "En attente",
-      date: "26 Mai 2026",
-      price: "18,750 FCFA"
-    }
-  ];
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    fetchFarmerOrders()
+      .then((remoteOrders) => {
+        if (!mounted) return;
+
+        setOrders(
+          remoteOrders.map((order) => ({
+            id: order.id,
+            crop: order.crop,
+            buyer: order.buyer,
+            quantity: `${order.quantity} ${order.unit}`,
+            status: formatStatus(order.status),
+            date: new Date(order.date).toLocaleDateString("fr-FR", {
+              day: "numeric",
+              month: "long",
+              year: "numeric"
+            }),
+            price: formatPrice(order.totalPrice)
+          }))
+        );
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err.message || "Impossible de charger les commandes");
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -90,7 +121,29 @@ export default function OrdersScreenMVP({ onBack }: OrdersScreenMVPProps) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
-        {orders.length === 0 ? (
+        {loading ? (
+          <motion.div
+            className="flex flex-col items-center justify-center h-full text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+              <Clock className="w-8 h-8 text-muted-foreground animate-spin" />
+            </div>
+            <p className="text-muted-foreground">Chargement des commandes...</p>
+          </motion.div>
+        ) : error ? (
+          <motion.div
+            className="flex flex-col items-center justify-center h-full text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="w-8 h-8 text-red-600" />
+            </div>
+            <p className="text-red-600">{error}</p>
+          </motion.div>
+        ) : orders.length === 0 ? (
           <motion.div
             className="flex flex-col items-center justify-center h-full text-center"
             initial={{ opacity: 0, y: 20 }}

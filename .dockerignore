@@ -1,6 +1,7 @@
 node_modules
 dist
-server/dist
+backend/dist
+frontend/dist
 .serverless
 .env
 .env.*
@@ -12,3 +13,4 @@ pnpm-debug.log*
 .vscode
 .idea
 coverage
+.git

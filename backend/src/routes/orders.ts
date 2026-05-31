@@ -37,4 +37,34 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   res.status(201).json(order);
 });
 
+router.get("/mine", requireAuth, async (req: AuthRequest, res) => {
+  const orders = await prisma.order.findMany({
+    where: {
+      listing: {
+        farmerId: req.user!.id
+      }
+    },
+    include: {
+      listing: true,
+      buyer: true
+    },
+    orderBy: {
+      createdAt: "desc"
+    }
+  });
+
+  res.json(
+    orders.map((order) => ({
+      id: order.id,
+      crop: order.listing.title,
+      buyer: order.buyer.name,
+      quantity: order.quantity,
+      status: order.status,
+      date: order.createdAt,
+      totalPrice: order.totalPrice,
+      unit: order.listing.unit
+    }))
+  );
+});
+
 export default router;

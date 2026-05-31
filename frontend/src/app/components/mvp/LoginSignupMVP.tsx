@@ -3,6 +3,7 @@ import { Phone, ArrowRight } from "lucide-react";
 import { motion } from "motion/react";
 import logoMagro from "../../../imports/MAGRO.png";
 import { requestOtp, verifyOtp } from "../../../services/auth";
+import { validateMalianPhone } from "../../../services/phoneValidation";
 
 interface LoginSignupMVPProps {
   onComplete: () => void;
@@ -16,12 +17,21 @@ export default function LoginSignupMVP({ onComplete }: LoginSignupMVPProps) {
   const [errorMessage, setErrorMessage] = useState("");
 
   const handlePhoneContinue = async () => {
-    if (phoneNumber.length < 8) return;
     setErrorMessage("");
+    
+    // Valider le numéro de téléphone malien
+    const validation = validateMalianPhone(phoneNumber);
+    if (!validation.isValid) {
+      setErrorMessage(validation.error || "Veuillez saisir un numéro de téléphone malien valide.");
+      return;
+    }
+
+    // Utiliser le numéro formaté
+    const formattedPhone = validation.formattedPhone || phoneNumber;
     setIsLoading(true);
 
     try {
-      await requestOtp(phoneNumber);
+      await requestOtp(formattedPhone);
       setStep("otp");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Impossible d'envoyer le code OTP");
