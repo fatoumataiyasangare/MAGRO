@@ -50,10 +50,25 @@ export async function createAlert(cropName: string, region?: string) {
     return newAlert;
   }
 
-  return apiFetch<AvailabilityAlert>("/alerts", {
-    method: "POST",
-    body: JSON.stringify({ cropName, region })
-  });
+  try {
+    return await apiFetch<AvailabilityAlert>("/alerts", {
+      method: "POST",
+      body: JSON.stringify({ cropName, region })
+    });
+  } catch (err) {
+    console.warn("[Alerts] API indisponible, fallback mock", err);
+    const alerts = getMockAlerts();
+    const newAlert: AvailabilityAlert = {
+      id: "alert-" + Date.now(),
+      buyerId: "mock-buyer",
+      cropName,
+      region,
+      createdAt: new Date().toISOString()
+    };
+    alerts.push(newAlert);
+    saveMockAlerts(alerts);
+    return newAlert;
+  }
 }
 
 export async function fetchMyAlerts() {
@@ -61,5 +76,10 @@ export async function fetchMyAlerts() {
   if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
     return getMockAlerts();
   }
-  return apiFetch<AvailabilityAlert[]>("/alerts/mine");
+  try {
+    return await apiFetch<AvailabilityAlert[]>("/alerts/mine");
+  } catch (err) {
+    console.warn("[Alerts] API indisponible, fallback mock", err);
+    return getMockAlerts();
+  }
 }

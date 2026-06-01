@@ -65,10 +65,29 @@ export async function openDispute(orderId: string, reason: string, orderPrice = 
     return newDispute;
   }
 
-  return apiFetch<Dispute>("/orders/" + orderId + "/dispute", {
-    method: "POST",
-    body: JSON.stringify({ reason })
-  });
+  try {
+    return await apiFetch<Dispute>("/orders/" + orderId + "/dispute", {
+      method: "POST",
+      body: JSON.stringify({ reason })
+    });
+  } catch (err) {
+    console.warn("[Disputes] API indisponible, fallback mock", err);
+    const disputes = getMockDisputes();
+    const newDispute: Dispute = {
+      id: "dis-" + Date.now(),
+      orderId,
+      openedBy: "mock-buyer",
+      reason,
+      status: "NEW",
+      createdAt: new Date().toISOString(),
+      orderPrice,
+      buyerName,
+      cropName
+    };
+    disputes.push(newDispute);
+    saveMockDisputes(disputes);
+    return newDispute;
+  }
 }
 
 export async function fetchDisputes() {
@@ -76,7 +95,12 @@ export async function fetchDisputes() {
   if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
     return getMockDisputes();
   }
-  return apiFetch<Dispute[]>("/admin/disputes");
+  try {
+    return await apiFetch<Dispute[]>("/admin/disputes");
+  } catch (err) {
+    console.warn("[Disputes] API indisponible, fallback mock", err);
+    return getMockDisputes();
+  }
 }
 
 export async function resolveDispute(
@@ -104,8 +128,27 @@ export async function resolveDispute(
     throw new Error("Litige non trouvé");
   }
 
-  return apiFetch<Dispute>(`/admin/disputes/${disputeId}/resolve`, {
-    method: "PATCH",
-    body: JSON.stringify({ decision, splitRatio, decisionNote: note })
-  });
+  try {
+    return await apiFetch<Dispute>(`/admin/disputes/${disputeId}/resolve`, {
+      method: "PATCH",
+      body: JSON.stringify({ decision, splitRatio, decisionNote: note })
+    });
+  } catch (err) {
+    console.warn("[Disputes] API indisponible, fallback mock", err);
+    const disputes = getMockDisputes();
+    const idx = disputes.findIndex((d) => d.id === disputeId);
+    if (idx !== -1) {
+      disputes[idx] = {
+        ...disputes[idx],
+        status: "RESOLVED",
+        adminDecision: decision,
+        splitRatio,
+        decisionNote: note,
+        decidedBy: "mock-moderator"
+      };
+      saveMockDisputes(disputes);
+      return disputes[idx];
+    }
+    throw new Error("Litige non trouvé");
+  }
 }

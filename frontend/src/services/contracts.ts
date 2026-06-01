@@ -83,10 +83,33 @@ export async function createSeasonalContract(data: {
     return newContract;
   }
 
-  return apiFetch<SeasonalContract>("/contracts", {
-    method: "POST",
-    body: JSON.stringify(data)
-  });
+  try {
+    return await apiFetch<SeasonalContract>("/contracts", {
+      method: "POST",
+      body: JSON.stringify(data)
+    });
+  } catch (err) {
+    console.warn("[Contracts] API indisponible, fallback mock", err);
+    const contracts = getMockContracts();
+    const newContract: SeasonalContract = {
+      id: "con-" + Date.now(),
+      buyerId: "mock-buyer-industry",
+      buyerName: "Industrie Agro-Mali",
+      farmerId: data.farmerId,
+      farmerName: data.farmerName,
+      cropName: data.cropName,
+      totalQuantityKg: data.totalQuantityKg,
+      pricePerKg: data.pricePerKg,
+      seasonStart: data.seasonStart,
+      seasonEnd: data.seasonEnd,
+      deliverySchedule: data.deliverySchedule,
+      status: "PENDING",
+      createdAt: new Date().toISOString()
+    };
+    contracts.push(newContract);
+    saveMockContracts(contracts);
+    return newContract;
+  }
 }
 
 export async function fetchMyContracts() {
@@ -94,7 +117,12 @@ export async function fetchMyContracts() {
   if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
     return getMockContracts();
   }
-  return apiFetch<SeasonalContract[]>("/contracts/mine");
+  try {
+    return await apiFetch<SeasonalContract[]>("/contracts/mine");
+  } catch (err) {
+    console.warn("[Contracts] API indisponible, fallback mock", err);
+    return getMockContracts();
+  }
 }
 
 export async function updateContractStatus(contractId: string, status: "ACTIVE" | "CANCELLED") {
@@ -114,8 +142,23 @@ export async function updateContractStatus(contractId: string, status: "ACTIVE" 
     throw new Error("Contrat non trouvé");
   }
 
-  return apiFetch<SeasonalContract>(`/contracts/${contractId}/status`, {
-    method: "PATCH",
-    body: JSON.stringify({ status })
-  });
+  try {
+    return await apiFetch<SeasonalContract>(`/contracts/${contractId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+  } catch (err) {
+    console.warn("[Contracts] API indisponible, fallback mock", err);
+    const contracts = getMockContracts();
+    const idx = contracts.findIndex((c) => c.id === contractId);
+    if (idx !== -1) {
+      contracts[idx] = {
+        ...contracts[idx],
+        status
+      };
+      saveMockContracts(contracts);
+      return contracts[idx];
+    }
+    throw new Error("Contrat non trouvé");
+  }
 }

@@ -184,21 +184,21 @@ export default function ProjectorsRegulatorsScreen({ userName, onNavigate }: Pro
             {/* Simulation controls for Plafond RBAC */}
             <div className="flex items-center gap-2 mt-2">
               <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full">
-                Profil : {adminRole === "SUPER_ADMIN" ? "Super Admin 👑" : "Modérateur 🛡️"}
+                Profil : Modérateur 🛡️
               </span>
-              <button 
-                onClick={() => setAdminRole(adminRole === "SUPER_ADMIN" ? "MODERATOR" : "SUPER_ADMIN")}
-                className="text-[9px] underline text-secondary font-semibold hover:text-white"
-              >
-                (Basculer le rôle)
-              </button>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="relative p-2 bg-white/20 rounded-lg">
+            <button 
+              onClick={() => { setActiveTab("monitor"); setSubTab("verifications"); }}
+              className="relative p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+            >
               <Shield className="w-5 h-5" />
             </button>
-            <button className="relative p-2 bg-white/20 rounded-lg">
+            <button 
+              onClick={() => { setActiveTab("monitor"); setSubTab("disputes"); }}
+              className="relative p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+            >
               <Monitor className="w-5 h-5" />
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-secondary text-[10px] rounded-full flex items-center justify-center font-bold">
                 {verRequests.filter(r => r.status === "PENDING").length + disputes.filter(d => d.status === "NEW").length}
@@ -469,40 +469,95 @@ export default function ProjectorsRegulatorsScreen({ userName, onNavigate }: Pro
 
             {/* 4. Analyst KPI, Exports, Keys */}
             {subTab === "analyst" && (
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-800">Console d'Analyse Institutionnelle</h3>
+              <div className="space-y-4 pb-4">
+                <h3 className="text-sm font-semibold text-gray-800">Console d'Analyse & Comptabilité</h3>
 
-                {/* KPIs */}
-                <div className="bg-white p-4 rounded-xl border border-border space-y-2 text-xs">
-                  <h4 className="font-bold text-gray-700 uppercase tracking-wider text-[10px]">Statistiques plateforme</h4>
-                  <div className="grid grid-cols-2 gap-2 text-center pt-1">
-                    <div className="bg-muted p-2 rounded-lg">
-                      <span className="text-[10px] text-muted-foreground block">Volume total finalisé</span>
-                      <strong className="text-sm text-primary">{formatPrice(totalVolume)}</strong>
+                {/* Live KPI Cards */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "Volume Séquestré", value: formatPrice(totalVolume), color: "text-primary", bg: "bg-blue-50", icon: "🔒" },
+                    { label: "Commissions prélevées", value: formatPrice(Math.round(totalVolume * 0.02)), color: "text-green-700", bg: "bg-green-50", icon: "💰" },
+                    { label: "Litiges résolus", value: `${disputes.filter(d => d.status === "RESOLVED").length}/${disputes.length}`, color: "text-amber-700", bg: "bg-amber-50", icon: "⚖️" },
+                    { label: "Badges Or actifs", value: "3", color: "text-amber-600", bg: "bg-amber-50", icon: "🟡" },
+                  ].map(kpi => (
+                    <div key={kpi.label} className={`${kpi.bg} rounded-xl p-3 border border-white shadow-sm`}>
+                      <div className="text-lg mb-0.5">{kpi.icon}</div>
+                      <div className={`text-sm font-bold ${kpi.color}`}>{kpi.value}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">{kpi.label}</div>
                     </div>
-                    <div className="bg-muted p-2 rounded-lg">
-                      <span className="text-[10px] text-muted-foreground block">Badges Or actifs</span>
-                      <strong className="text-sm text-amber-600">3</strong>
-                    </div>
+                  ))}
+                </div>
+
+                {/* Digital Accounting Ledger */}
+                <div className="bg-white rounded-xl border border-border overflow-hidden shadow-sm text-xs">
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <h4 className="font-bold text-gray-700 uppercase tracking-wider text-[10px]">📒 Livre de Compte Digital</h4>
+                    <span className="text-[10px] text-green-600 font-semibold">● En direct</span>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {[
+                      { date: "01 Juin", desc: "Commande Tomates – Amadou → Fatoumata", type: "credit", amount: 37500 },
+                      { date: "01 Juin", desc: "Commission MAGRO 2%", type: "commission", amount: 750 },
+                      { date: "31 Mai", desc: "Fonds libérés – Confirmation livraison #2A4", type: "release", amount: 25000 },
+                      { date: "30 Mai", desc: "Litige résolu – Remboursement partiel #1B7", type: "refund", amount: -12000 },
+                      { date: "29 Mai", desc: "Commande Oignons – Ibrahim → GMM", type: "credit", amount: 80000 },
+                    ].map((entry, i) => (
+                      <div key={i} className="px-4 py-2.5 flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="text-gray-800 font-medium text-[11px]">{entry.desc}</p>
+                          <p className="text-muted-foreground text-[10px]">{entry.date}</p>
+                        </div>
+                        <div className={`font-bold text-xs ml-2 ${
+                          entry.type === "refund" ? "text-red-600" :
+                          entry.type === "commission" ? "text-amber-600" :
+                          entry.type === "release" ? "text-green-600" : "text-primary"
+                        }`}>
+                          {entry.amount < 0 ? "-" : "+"}{formatPrice(Math.abs(entry.amount))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
+                {/* Market Stats — for JICA / DNA */}
+                <div className="bg-white p-4 rounded-xl border border-border space-y-3 text-xs shadow-sm">
+                  <h4 className="font-bold text-gray-700 uppercase tracking-wider text-[10px]">📊 Statistiques Marché (Partenaires)</h4>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    {[
+                      { label: "Tomates", value: "750 F/kg", trend: "+12%" },
+                      { label: "Oignons", value: "500 F/kg", trend: "-5%" },
+                      { label: "Mangues", value: "1200 F/kg", trend: "+20%" },
+                    ].map(stat => (
+                      <div key={stat.label} className="bg-muted rounded-lg p-2">
+                        <p className="text-[9px] text-muted-foreground">{stat.label}</p>
+                        <p className="font-bold text-gray-900 text-[11px]">{stat.value}</p>
+                        <p className={`text-[9px] font-semibold ${stat.trend.startsWith("+") ? "text-green-600" : "text-red-600"}`}>
+                          {stat.trend}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Données agrégées et anonymisées — Régions pilotes : Sikasso, Koulikoro, Ségou, Kayes, Bamako
+                  </p>
+                </div>
+
                 {/* Institutional Export */}
-                <div className="bg-white p-4 rounded-xl border border-border space-y-3 text-xs">
-                  <h4 className="font-bold text-gray-700 uppercase tracking-wider text-[10px]">Export de données anonymisées</h4>
+                <div className="bg-white p-4 rounded-xl border border-border space-y-3 text-xs shadow-sm">
+                  <h4 className="font-bold text-gray-700 uppercase tracking-wider text-[10px]">📤 Export de données</h4>
                   <p className="text-[11px] text-muted-foreground">
-                    Générez des rapports agrégés des cours et volumes pour le Ministère ou la JICA.
+                    Générez des rapports agrégés et anonymisés pour le Ministère de l'Agriculture ou la JICA.
                   </p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleExportData("csv")}
-                      className="flex-1 bg-muted hover:bg-gray-200 border border-border text-foreground font-bold py-2 rounded-lg flex items-center justify-center gap-1"
+                      className="flex-1 bg-muted hover:bg-gray-200 border border-border text-foreground font-bold py-2.5 rounded-lg flex items-center justify-center gap-1"
                     >
                       <Download className="w-3.5 h-3.5" /> CSV
                     </button>
                     <button
                       onClick={() => handleExportData("json")}
-                      className="flex-1 bg-muted hover:bg-gray-200 border border-border text-foreground font-bold py-2 rounded-lg flex items-center justify-center gap-1"
+                      className="flex-1 bg-muted hover:bg-gray-200 border border-border text-foreground font-bold py-2.5 rounded-lg flex items-center justify-center gap-1"
                     >
                       <Download className="w-3.5 h-3.5" /> JSON
                     </button>
@@ -510,36 +565,33 @@ export default function ProjectorsRegulatorsScreen({ userName, onNavigate }: Pro
                 </div>
 
                 {/* Institutional API Keys */}
-                <div className="bg-white p-4 rounded-xl border border-border space-y-3 text-xs">
-                  <h4 className="font-bold text-gray-700 uppercase tracking-wider text-[10px]">Gestion des clés API Partenaires</h4>
-                  
-                  {/* Create key */}
+                <div className="bg-white p-4 rounded-xl border border-border space-y-3 text-xs shadow-sm">
+                  <h4 className="font-bold text-gray-700 uppercase tracking-wider text-[10px]">🔑 Clés API Institutionnelles</h4>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       placeholder="Nom du partenaire..."
                       value={newKeyName}
                       onChange={(e) => setNewKeyName(e.target.value)}
-                      className="flex-1 p-2 bg-muted rounded-lg text-xs"
+                      className="flex-1 p-2 bg-muted rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                     <button
                       onClick={handleCreateApiKey}
-                      className="bg-primary text-white px-4 py-2 rounded-lg font-bold"
+                      className="bg-primary text-white px-4 py-2 rounded-lg font-bold hover:bg-primary/90"
                     >
-                      Créer Clé
+                      Créer
                     </button>
                   </div>
-
-                  <div className="space-y-2 pt-2">
+                  <div className="space-y-2">
                     {apiKeys.map(k => (
-                      <div key={k.id} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100 text-[10px]">
+                      <div key={k.id} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                         <div>
-                          <strong>{k.name}</strong>
-                          <span className="text-muted-foreground block">Quota : {k.quota} req/jour</span>
+                          <strong className="text-gray-900">{k.name}</strong>
+                          <span className="text-muted-foreground block text-[10px]">Quota : {k.quota} req/jour</span>
                         </div>
                         <button
                           onClick={() => handleRevokeApiKey(k.id)}
-                          className="text-red-600 font-semibold"
+                          className="text-red-600 font-semibold text-[10px] bg-red-50 px-2 py-1 rounded-lg hover:bg-red-100"
                         >
                           Révoquer
                         </button>

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import SplashScreen from "./screens/SplashScreen";
-import LoginSignup from "./screens/LoginSignup";
-import UserRoleSelection from "./screens/UserRoleSelection";
+import WelcomeScreen from "./screens/WelcomeScreen";
+import LoginScreen from "./screens/LoginScreen";
+import SignupFlow from "./screens/SignupFlow";
+import TermsScreen from "./screens/TermsScreen";
 import MarketplaceHome from "./screens/MarketplaceHome";
 import ProductDetail from "./screens/ProductDetail";
 import OrderScreen from "./screens/OrderScreen";
@@ -13,6 +15,10 @@ import ProjectorsRegulatorsScreen from "./screens/ProjectorsRegulatorsScreen";
 import ChatScreen from "./screens/ChatScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import OrdersScreen from "./screens/OrdersScreen";
+import TransportNegotiationScreen from "./screens/TransportNegotiationScreen";
+import ProductionPlanningScreen from "./screens/ProductionPlanningScreen";
+import OfflineBanner from "./components/OfflineBanner";
+import { ToastProvider, useToast } from "./components/ToastProvider";
 import { Product } from "./screens/MarketplaceHome";
 import {
   fetchProfile,
@@ -25,14 +31,16 @@ import {
   deleteListing,
   fetchListings,
   fetchMyListings,
+  updateListing,
   ListingItem
 } from "./services/listings";
 import { placeOrder } from "./services/orders";
 
 type Screen =
   | "splash"
+  | "welcome"
   | "login"
-  | "role-selection"
+  | "signup"
   | "marketplace"
   | "product-detail"
   | "order"
@@ -40,9 +48,11 @@ type Screen =
   | "create-listing"
   | "my-listings"
   | "orders"
-  | "regulator-dashboard"
   | "chat"
-  | "profile";
+  | "profile"
+  | "transport"
+  | "production-planning"
+  | "terms";
 
 function mapListingToProduct(listing: ListingItem): Product {
   return {
@@ -58,7 +68,8 @@ function mapListingToProduct(listing: ListingItem): Product {
   };
 }
 
-export default function App() {
+function AppContent() {
+  const { showToast } = useToast();
   const [currentScreen, setCurrentScreen] = useState<Screen>("splash");
   const [userRole, setUserRole] = useState<"buyer" | "farmer" | "regulator" | null>(null);
   const [userName, setUserName] = useState("Moussa");
@@ -68,28 +79,28 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setCurrentScreen("login");
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
     async function loadSession() {
       try {
         const profile = await fetchProfile();
         setUserProfile(profile);
         setUserName(profile.name);
         setUserRole(profile.role.toLowerCase() as "buyer" | "farmer" | "regulator");
-        if (profile.role === "BUYER") {
-          setCurrentScreen("marketplace");
-        } else if (profile.role === "FARMER") {
-          setCurrentScreen("farmer-dashboard");
-        } else {
-          setCurrentScreen("regulator-dashboard");
-        }
+        
+        // Wait for splash screen
+        setTimeout(() => {
+          if (profile.role === "BUYER") {
+            setCurrentScreen("marketplace");
+          } else if (profile.role === "FARMER") {
+            setCurrentScreen("farmer-dashboard");
+          } else {
+            setCurrentScreen("regulator-dashboard");
+          }
+        }, 1500);
       } catch {
-        // no active session
+        // no active session, go to welcome screen
+        setTimeout(() => {
+          setCurrentScreen("welcome");
+        }, 1500);
       }
     }
 
@@ -119,25 +130,41 @@ export default function App() {
     loadMyListings();
   }, []);
 
-  const handleLoginComplete = () => {
-    setCurrentScreen("role-selection");
+  // Login completed: detect role from profile and redirect
+  const handleLoginComplete = async () => {
+    try {
+      const profile = await fetchProfile();
+      setUserProfile(profile);
+      setUserName(profile.name);
+      const role = profile.role.toLowerCase() as "buyer" | "farmer";
+      setUserRole(role);
+      if (role === "farmer") {
+        setCurrentScreen("farmer-dashboard");
+      } else {
+        setCurrentScreen("marketplace");
+      }
+    } catch {
+      // Fallback: if no profile yet, default to marketplace
+      setUserRole("buyer");
+      setCurrentScreen("marketplace");
+    }
   };
 
-  const handleRoleSelect = async (role: "buyer" | "farmer" | "regulator") => {
+  // Signup completed: set role and redirect
+  const handleSignupComplete = async (role: "buyer" | "farmer") => {
     setUserRole(role);
-
     try {
-      await updateRole(role.toUpperCase() as "BUYER" | "FARMER" | "REGULATOR");
+      await updateRole(role.toUpperCase() as "BUYER" | "FARMER");
+      const profile = await fetchProfile();
+      setUserProfile(profile);
+      setUserName(profile.name);
     } catch {
-      // ignore role update failures, preserve UI flow
+      // ignore
     }
-
-    if (role === "buyer") {
-      setCurrentScreen("marketplace");
-    } else if (role === "farmer") {
+    if (role === "farmer") {
       setCurrentScreen("farmer-dashboard");
     } else {
-      setCurrentScreen("regulator-dashboard");
+      setCurrentScreen("marketplace");
     }
   };
 
@@ -170,17 +197,17 @@ export default function App() {
       const paymentMsg = depositRequired
         ? `Acompte de ${depositAmount.toLocaleString()} FCFA réglé par Mobile Money. La commande est confirmée et en pré-production !`
         : `Paiement de ${(quantity * selectedProduct.price).toLocaleString()} FCFA séquestré avec succès. Commande confirmée !`;
-      alert(paymentMsg);
-      setCurrentScreen(getHomePage());
+      showToast(paymentMsg, "success");
+      setCurrentScreen("orders");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Impossible de passer la commande");
+      showToast(error instanceof Error ? error.message : "Impossible de passer la commande", "error");
     }
   };
 
   const getHomePage = (): Screen => {
     if (userRole === "buyer") return "marketplace";
     if (userRole === "farmer") return "farmer-dashboard";
-    return "regulator-dashboard";
+    return "marketplace";
   };
 
   const handleBackToHome = () => {
@@ -212,11 +239,12 @@ export default function App() {
         image: product.image
       });
 
-      setFarmerProducts((current) => [...current, mapListingToProduct(created)]);
-      alert("Produit publié avec succès !");
+      setFarmerProducts((current) => [mapListingToProduct(created), ...current]);
+      setListings((current) => [mapListingToProduct(created), ...current]);
+      showToast("Produit publié avec succès !", "success");
       setCurrentScreen("farmer-dashboard");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Impossible de publier le produit");
+      showToast(error instanceof Error ? error.message : "Impossible de publier le produit", "error");
     }
   };
 
@@ -228,24 +256,44 @@ export default function App() {
     try {
       await deleteListing(productId);
       setFarmerProducts((current) => current.filter((p) => p.id !== productId));
+      setListings((current) => current.filter((p) => p.id !== productId));
+      showToast("Annonce supprimée", "success");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Impossible de supprimer l'annonce");
+      showToast(error instanceof Error ? error.message : "Impossible de supprimer l'annonce", "error");
     }
   };
 
-  const handleEditProduct = (product: Product) => {
-    alert("Fonctionnalité d'édition en cours de développement");
+  const handleEditProduct = async (product: Product) => {
+    try {
+      const updatedListing = await updateListing(product.id, {
+        price: product.price,
+        quantity: parseInt(product.quantity.replace(/\D/g, "")) || 0
+      });
+      const updatedProduct = mapListingToProduct(updatedListing);
+      
+      // Update local state
+      setFarmerProducts((current) =>
+        current.map((p) => (p.id === product.id ? updatedProduct : p))
+      );
+      setListings((current) =>
+        current.map((p) => (p.id === product.id ? updatedProduct : p))
+      );
+      showToast("Produit mis à jour avec succès !", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Impossible de modifier le produit", "error");
+    }
   };
 
   const handleLogout = async () => {
     await logoutUser();
     setUserRole(null);
     setUserProfile(null);
-    setCurrentScreen("login");
+    setCurrentScreen("welcome");
   };
 
   return (
-    <div className="size-full bg-background overflow-hidden">
+    <div className="max-w-md mx-auto h-[100dvh] bg-white shadow-2xl relative overflow-hidden flex flex-col">
+      <OfflineBanner />
       <AnimatePresence mode="wait">
         {currentScreen === "splash" && (
           <motion.div
@@ -259,6 +307,22 @@ export default function App() {
           </motion.div>
         )}
 
+        {currentScreen === "welcome" && (
+          <motion.div
+            key="welcome"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <WelcomeScreen
+              onLogin={() => setCurrentScreen("login")}
+              onSignup={() => setCurrentScreen("signup")}
+              onTerms={() => setCurrentScreen("terms")}
+            />
+          </motion.div>
+        )}
+
         {currentScreen === "login" && (
           <motion.div
             key="login"
@@ -267,19 +331,37 @@ export default function App() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <LoginSignup onComplete={handleLoginComplete} />
+            <LoginScreen
+              onComplete={handleLoginComplete}
+              onBack={() => setCurrentScreen("welcome")}
+            />
           </motion.div>
         )}
 
-        {currentScreen === "role-selection" && (
+        {currentScreen === "signup" && (
           <motion.div
-            key="role-selection"
+            key="signup"
             initial={{ opacity: 0, x: 100 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <UserRoleSelection onSelectRole={handleRoleSelect} />
+            <SignupFlow
+              onComplete={handleSignupComplete}
+              onBack={() => setCurrentScreen("welcome")}
+            />
+          </motion.div>
+        )}
+
+        {currentScreen === "terms" && (
+          <motion.div
+            key="terms"
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -100 }}
+            transition={{ duration: 0.3 }}
+          >
+            <TermsScreen onBack={() => setCurrentScreen("welcome")} />
           </motion.div>
         )}
 
@@ -381,20 +463,7 @@ export default function App() {
           </motion.div>
         )}
 
-        {currentScreen === "regulator-dashboard" && (
-          <motion.div
-            key="regulator-dashboard"
-            initial={{ opacity: 0, x: 100 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -100 }}
-            transition={{ duration: 0.3 }}
-          >
-            <ProjectorsRegulatorsScreen
-              userName={userName}
-              onNavigate={handleNavigate}
-            />
-          </motion.div>
-        )}
+        {/* Regulator dashboard removed from public app */}
 
         {currentScreen === "chat" && (
           <motion.div
@@ -424,6 +493,7 @@ export default function App() {
               userRole={userRole}
               onBack={handleBackToHome}
               onLogout={handleLogout}
+              onNavigate={handleNavigate}
             />
           </motion.div>
         )}
@@ -435,10 +505,45 @@ export default function App() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <OrdersScreen onBack={handleBackToHome} userRole={userRole} />
+            <OrdersScreen onBack={handleBackToHome} onNavigate={handleNavigate} userRole={userRole} />
+          </motion.div>
+        )}
+        {currentScreen === "transport" && (
+          <motion.div
+            key="transport"
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -100 }}
+            transition={{ duration: 0.3 }}
+          >
+            <TransportNegotiationScreen
+              onBack={handleBackToHome}
+              orderCrop={selectedProduct?.name}
+              orderRegion={selectedProduct?.region}
+              orderQuantity={selectedProduct?.quantity}
+            />
+          </motion.div>
+        )}
+        {currentScreen === "production-planning" && (
+          <motion.div
+            key="production-planning"
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -100 }}
+            transition={{ duration: 0.3 }}
+          >
+            <ProductionPlanningScreen onBack={() => setCurrentScreen("farmer-dashboard")} />
           </motion.div>
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
   );
 }

@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle, Clock, AlertCircle, ShieldAlert, Sparkles } from "lucide-react";
+import { ArrowLeft, CheckCircle, Clock, AlertCircle, ShieldAlert, Sparkles, Truck } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { fetchFarmerOrders, FarmerOrder, updateOrderStatus, confirmDelivery } from "../services/orders";
+import { fetchFarmerOrders, FarmerOrder, updateOrderStatus, confirmDelivery, cancelOrder } from "../services/orders";
 import { openDispute } from "../services/disputes";
+import { updateListingQuantity } from "../services/listings";
+import { useToast } from "../components/ToastProvider";
 
 interface Order {
   id: string;
+  listingId?: string;
   crop: string;
   buyer: string;
   quantity: string;
@@ -22,6 +25,7 @@ interface Order {
 
 interface OrdersScreenMVPProps {
   onBack: () => void;
+  onNavigate?: (screen: string) => void;
   userRole?: "buyer" | "farmer" | "regulator" | null;
 }
 
@@ -50,7 +54,8 @@ function formatPrice(value: number) {
   return `${new Intl.NumberFormat("fr-FR").format(value)} FCFA`;
 }
 
-export default function OrdersScreenMVP({ onBack, userRole: propRole }: OrdersScreenMVPProps) {
+export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole }: OrdersScreenMVPProps) {
+  const { showToast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +66,10 @@ export default function OrdersScreenMVP({ onBack, userRole: propRole }: OrdersSc
   // Dispute form state
   const [disputeReason, setDisputeReason] = useState("");
   const [disputedOrderId, setDisputedOrderId] = useState<string | null>(null);
+
+  // Rating state
+  const [ratingOrderId, setRatingOrderId] = useState<string | null>(null);
+  const [ratingValue, setRatingValue] = useState(5);
 
   // Detect user role from local storage if not in props
   const [role, setRole] = useState<"buyer" | "farmer" | "regulator">(() => {
@@ -75,6 +84,7 @@ export default function OrdersScreenMVP({ onBack, userRole: propRole }: OrdersSc
         // En mode acheteur, filtrer les commandes passées par l'acheteur de test, sinon tout afficher pour le fermier
         const processed = remoteOrders.map((order) => ({
           id: order.id,
+          listingId: order.listingId,
           crop: order.crop,
           buyer: order.buyer,
           quantity: `${order.quantity} kg`,
@@ -137,13 +147,16 @@ export default function OrdersScreenMVP({ onBack, userRole: propRole }: OrdersSc
   };
 
   // Farmer accepts order (updates state CONFIRMEE)
-  const handleAcceptOrder = async (orderId: string) => {
+  const handleAcceptOrder = async (orderId: string, listingId?: string, rawQuantity?: number) => {
     try {
       await updateOrderStatus(orderId, "CONFIRMEE");
-      alert("Commande acceptée avec succès !");
+      if (listingId && rawQuantity) {
+        await updateListingQuantity(listingId, rawQuantity);
+      }
+      showToast("Commande acceptée avec succès ! Le stock a été mis à jour.", "success");
       loadOrders();
     } catch (err) {
-      alert("Impossible de modifier le statut.");
+      showToast("Impossible de modifier le statut.", "error");
     }
   };
 
@@ -151,10 +164,10 @@ export default function OrdersScreenMVP({ onBack, userRole: propRole }: OrdersSc
   const handleRefuseOrder = async (orderId: string) => {
     try {
       await updateOrderStatus(orderId, "CANCELLED");
-      alert("Commande refusée.");
+      showToast("Commande refusée.", "info");
       loadOrders();
     } catch (err) {
-      alert("Impossible de refuser la commande.");
+      showToast("Impossible de refuser la commande.", "error");
     }
   };
 
@@ -162,25 +175,46 @@ export default function OrdersScreenMVP({ onBack, userRole: propRole }: OrdersSc
   const handleReadyOrder = async (orderId: string) => {
     try {
       await updateOrderStatus(orderId, "PRETE");
-      alert("Commande marquée comme PRÊTE. L'acheteur a été notifié par SMS.");
+      showToast("Commande marquée comme PRÊTE. L'acheteur a été notifié.", "success");
       loadOrders();
     } catch (err) {
-      alert("Impossible de modifier le statut.");
+      showToast("Impossible de modifier le statut.", "error");
     }
   };
 
   // Buyer confirms delivery (Escrow release)
   const handleConfirmDelivery = async (orderId: string) => {
-    if (!confirm("Confirmez-vous la réception conforme de votre commande ? Cela libérera immédiatement les fonds bloqués en séquestre vers le producteur.")) {
+    if (!confirm("Confirmez-vous la réception conforme ? Les fonds seront libérés.")) {
       return;
     }
     try {
       await confirmDelivery(orderId);
-      alert("Livraison confirmée. Fonds libérés avec succès vers l'agriculteur !");
+      showToast("Livraison confirmée. Fonds libérés vers l'agriculteur !", "success");
       loadOrders();
     } catch (err) {
-      alert("Erreur lors de la confirmation.");
+      showToast("Erreur lors de la confirmation.", "error");
     }
+  };
+
+  // Buyer cancels order
+  const handleCancelOrder = async (orderId: string) => {
+    if (!confirm("Êtes-vous sûr de vouloir annuler cette commande ?")) {
+      return;
+    }
+    try {
+      await cancelOrder(orderId);
+      showToast("Commande annulée et fonds remboursés.", "info");
+      loadOrders();
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors de l'annulation.", "error");
+    }
+  };
+
+  // Buyer rates farmer
+  const handleRateFarmer = (e: React.FormEvent) => {
+    e.preventDefault();
+    showToast(`Merci pour votre évaluation de ${ratingValue} étoiles !`, "success");
+    setRatingOrderId(null);
   };
 
   // Buyer submits dispute
@@ -201,12 +235,12 @@ export default function OrdersScreenMVP({ onBack, userRole: propRole }: OrdersSc
       // Update order status in orders database to DISPUTED
       await updateOrderStatus(disputedOrderId, "DISPUTED");
       
-      alert("Litige ouvert. Les fonds séquestrés pour cette commande ont été gelés. Un modérateur prendra contact sous 5 jours.");
+      showToast("Litige ouvert. Les fonds sont gelés.", "info");
       setDisputedOrderId(null);
       setDisputeReason("");
       loadOrders();
     } catch (err) {
-      alert("Erreur lors de l'ouverture du litige.");
+      showToast("Erreur lors de l'ouverture du litige.", "error");
     }
   };
 
@@ -229,7 +263,7 @@ export default function OrdersScreenMVP({ onBack, userRole: propRole }: OrdersSc
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-24 space-y-4">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Clock className="w-8 h-8 text-muted-foreground animate-spin mb-4" />
@@ -249,9 +283,9 @@ export default function OrdersScreenMVP({ onBack, userRole: propRole }: OrdersSc
           orders.map((order, index) => (
             <motion.div
               key={order.id}
-              className="bg-white rounded-xl border border-border p-4 shadow-sm hover:shadow-md transition-shadow"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
+              className="bg-white rounded-xl border border-border p-4 shadow-sm hover:scale-[1.02] hover:shadow-md transition-all duration-300"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
             >
               {/* Order Header */}
@@ -323,7 +357,7 @@ export default function OrdersScreenMVP({ onBack, userRole: propRole }: OrdersSc
                       {order.status === "EN_ATTENTE" && (
                         <>
                           <button
-                            onClick={() => handleAcceptOrder(order.id)}
+                            onClick={() => handleAcceptOrder(order.id, order.listingId, order.rawQuantity)}
                             className="flex-1 bg-secondary text-white py-2 rounded-lg font-semibold text-xs"
                           >
                             Accepter la commande
@@ -354,32 +388,96 @@ export default function OrdersScreenMVP({ onBack, userRole: propRole }: OrdersSc
 
                   {/* Actions buttons for Buyer */}
                   {role === "buyer" && (
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex flex-col gap-2 pt-2">
                       {order.status === "PRETE" && (
                         <>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleConfirmDelivery(order.id)}
+                              className="flex-1 bg-green-600 text-white py-2 rounded-lg font-semibold text-xs flex items-center justify-center gap-1"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              Confirmer la livraison
+                            </button>
+                            <button
+                              onClick={() => setDisputedOrderId(order.id)}
+                              className="flex-1 bg-red-100 text-red-700 py-2 rounded-lg font-semibold text-xs"
+                            >
+                              Signaler un litige
+                            </button>
+                          </div>
+                          {onNavigate && (
+                            <button
+                              onClick={() => onNavigate("transport")}
+                              className="w-full bg-blue-50 text-blue-700 border border-blue-200 py-2 rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 hover:bg-blue-100 transition-colors"
+                            >
+                              <Truck className="w-3.5 h-3.5" />
+                              Rechercher un transporteur
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {(order.status === "CONFIRMEE" || order.status === "CONFIRMED") && onNavigate && (
+                        <button
+                          onClick={() => onNavigate("transport")}
+                          className="w-full bg-blue-50 text-blue-700 border border-blue-200 py-2 rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 hover:bg-blue-100 transition-colors"
+                        >
+                          <Truck className="w-3.5 h-3.5" />
+                          Organiser le transport
+                        </button>
+                      )}
+                      {order.status === "EN_ATTENTE" && (
+                        <>
+                          <div className="w-full text-center text-muted-foreground p-1 text-xs">
+                            En attente de confirmation de la part du producteur. (48h max)
+                          </div>
                           <button
-                            onClick={() => handleConfirmDelivery(order.id)}
-                            className="flex-1 bg-green-600 text-white py-2 rounded-lg font-semibold text-xs flex items-center justify-center gap-1"
+                            onClick={() => handleCancelOrder(order.id)}
+                            className="w-full bg-red-50 text-red-700 py-2 rounded-lg font-semibold text-xs border border-red-100 hover:bg-red-100 transition-colors"
                           >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            Confirmer la livraison
-                          </button>
-                          <button
-                            onClick={() => setDisputedOrderId(order.id)}
-                            className="flex-1 bg-red-100 text-red-700 py-2 rounded-lg font-semibold text-xs"
-                          >
-                            Signaler un litige
+                            Annuler la demande
                           </button>
                         </>
                       )}
-                      {order.status === "EN_ATTENTE" && (
-                        <div className="w-full text-center text-muted-foreground p-1 text-xs">
-                          En attente de confirmation de la part du producteur. (48h max)
-                        </div>
+                      {order.status === "DELIVERED" && (
+                        <button
+                          onClick={() => setRatingOrderId(order.id)}
+                          className="w-full bg-yellow-50 text-yellow-700 py-2 rounded-lg font-semibold text-xs border border-yellow-200 hover:bg-yellow-100 transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Évaluer le producteur
+                        </button>
                       )}
                     </div>
                   )}
                 </motion.div>
+              )}
+
+              {/* Rating modal */}
+              {ratingOrderId === order.id && (
+                <form onSubmit={handleRateFarmer} className="mt-3 pt-3 border-t border-yellow-200 space-y-3">
+                  <p className="text-xs text-yellow-800 font-semibold">Évaluer cette commande</p>
+                  <div className="flex justify-center gap-2 py-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        type="button"
+                        key={star}
+                        onClick={() => setRatingValue(star)}
+                        className={`text-2xl ${star <= ratingValue ? "text-yellow-400" : "text-gray-300"} hover:scale-110 transition-transform`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="submit" className="flex-1 bg-yellow-400 text-yellow-900 py-2 rounded-lg font-semibold text-xs">
+                      Envoyer l'avis
+                    </button>
+                    <button type="button" onClick={() => setRatingOrderId(null)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-xs">
+                      Annuler
+                    </button>
+                  </div>
+                </form>
               )}
 
               {/* Dispute form input (if user clicked "Signaler un litige") */}

@@ -1,5 +1,5 @@
-import { ArrowLeft, Settings, LogOut, ChevronRight, Star, Shield, Zap, Check } from "lucide-react";
-import { motion } from "motion/react";
+import { ArrowLeft, Settings, LogOut, ChevronRight, Star, Shield, Zap, Check, Globe, Bell, HelpCircle, X } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
 import { submitVerificationRequest } from "../services/verifications";
 
@@ -8,9 +8,10 @@ interface ProfileScreenMVPProps {
   userRole: "buyer" | "farmer" | "regulator";
   onBack: () => void;
   onLogout: () => void;
+  onNavigate: (screen: string) => void;
 }
 
-export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout }: ProfileScreenMVPProps) {
+export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout, onNavigate }: ProfileScreenMVPProps) {
   const [buyerType, setBuyerType] = useState<string>(() => localStorage.getItem("magro_buyer_subtype") || "individual");
   const [isPremium, setIsPremium] = useState<boolean>(() => localStorage.getItem("magro_premium_status") === "true");
   const [isVerified, setIsVerified] = useState<boolean>(() => localStorage.getItem("magro_verified_status") === "true");
@@ -18,6 +19,8 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout 
   
   // Verification form state
   const [showVerificationForm, setShowVerificationForm] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showReviews, setShowReviews] = useState(false);
   const [idDoc, setIdDoc] = useState("");
   const [parcelGps, setParcelGps] = useState("");
   const [bizReg, setBizReg] = useState("");
@@ -69,7 +72,7 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout 
       {/* Header */}
       <div className="bg-primary text-white px-6 pt-6 pb-12">
         <div className="flex items-center gap-4 mb-8">
-          <button onClick={onBack}>
+          <button onClick={onBack} className="cursor-pointer">
             <ArrowLeft className="w-6 h-6" />
           </button>
           <h1 className="text-xl">Profil</h1>
@@ -107,9 +110,9 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout 
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto -mt-6">
+      <div className="flex-1 overflow-y-auto px-6 py-4">
         <motion.div
-          className="bg-white rounded-t-3xl px-6 py-6 min-h-full"
+          className="bg-white rounded-3xl p-6 min-h-full shadow-sm border border-border"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -130,7 +133,7 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout 
                 </div>
                 <button
                   onClick={handleTogglePremium}
-                  className={`text-xs font-semibold px-4 py-2 rounded-xl transition-colors ${
+                  className={`text-xs font-semibold px-4 py-2 rounded-xl transition-colors cursor-pointer ${
                     isPremium ? "bg-blue-600 text-white" : "bg-white border border-blue-200 text-blue-700"
                   }`}
                 >
@@ -157,7 +160,7 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout 
                   {!isVerified && !verificationSubmitted && (
                     <button
                       onClick={() => setShowVerificationForm(!showVerificationForm)}
-                      className="text-xs font-semibold bg-white border border-green-200 text-green-700 px-4 py-2 rounded-xl hover:bg-green-100"
+                      className="text-xs font-semibold bg-white border border-green-200 text-green-700 px-4 py-2 rounded-xl hover:bg-green-100 cursor-pointer"
                     >
                       {showVerificationForm ? "Fermer" : "Soumettre"}
                     </button>
@@ -212,7 +215,7 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout 
 
                     <button
                       type="submit"
-                      className="w-full bg-green-600 text-white text-xs py-2 rounded-xl hover:bg-green-700 font-semibold"
+                      className="w-full bg-green-600 text-white text-xs py-2 rounded-xl hover:bg-green-700 font-semibold cursor-pointer"
                     >
                       Envoyer le dossier
                     </button>
@@ -258,7 +261,7 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout 
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg">Mes commandes</h3>
-              <button className="text-sm text-primary">Voir tout</button>
+              <button onClick={() => onNavigate('orders')} className="text-sm text-primary cursor-pointer">Voir tout</button>
             </div>
 
             <div className="space-y-3">
@@ -288,27 +291,100 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout 
           <div className="space-y-2 mb-8">
             <h3 className="text-lg mb-4">Paramètres</h3>
 
-            <button className="w-full flex items-center justify-between p-4 bg-muted rounded-xl hover:bg-muted/80 transition-colors">
+            <button onClick={() => setShowSettings(!showSettings)} className="w-full flex items-center justify-between p-4 bg-muted rounded-xl hover:bg-muted/80 transition-colors cursor-pointer">
               <div className="flex items-center gap-3">
                 <Settings className="w-5 h-5 text-muted-foreground" />
                 <span>Paramètres du compte</span>
               </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${showSettings ? 'rotate-90' : ''}`} />
             </button>
 
-            <button className="w-full flex items-center justify-between p-4 bg-muted rounded-xl hover:bg-muted/80 transition-colors">
+            <AnimatePresence>
+              {showSettings && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="bg-muted/50 rounded-xl p-4 space-y-3 mt-1">
+                    <div className="flex items-center gap-3 p-3 bg-white rounded-lg">
+                      <Globe className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="text-sm font-medium">Langue</p>
+                        <p className="text-xs text-muted-foreground">Français — Changer la langue de l'application</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-white rounded-lg">
+                      <Bell className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="text-sm font-medium">Notifications</p>
+                        <p className="text-xs text-muted-foreground">Gérer les alertes prix, commandes et messages</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-white rounded-lg">
+                      <HelpCircle className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="text-sm font-medium">Aide</p>
+                        <p className="text-xs text-muted-foreground">Centre d'aide et FAQ — Contactez le support</p>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <button onClick={() => setShowReviews(!showReviews)} className="w-full flex items-center justify-between p-4 bg-muted rounded-xl hover:bg-muted/80 transition-colors cursor-pointer">
               <div className="flex items-center gap-3">
                 <Star className="w-5 h-5 text-muted-foreground" />
                 <span>Mes avis</span>
               </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${showReviews ? 'rotate-90' : ''}`} />
             </button>
+
+            <AnimatePresence>
+              {showReviews && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="bg-muted/50 rounded-xl p-4 space-y-3 mt-1">
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="flex items-center gap-1 mb-1">
+                        {[1,2,3,4,5].map(s => <Star key={s} className={`w-3.5 h-3.5 ${s <= 5 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />)}
+                      </div>
+                      <p className="text-sm font-medium">Tomates excellentes</p>
+                      <p className="text-xs text-muted-foreground">Très frais et bien emballé. Livraison rapide !</p>
+                      <p className="text-xs text-muted-foreground mt-1">— Amadou K. • 12 Avr 2026</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="flex items-center gap-1 mb-1">
+                        {[1,2,3,4,5].map(s => <Star key={s} className={`w-3.5 h-3.5 ${s <= 4 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />)}
+                      </div>
+                      <p className="text-sm font-medium">Bon rapport qualité-prix</p>
+                      <p className="text-xs text-muted-foreground">Les oignons étaient de bonne taille. Je recommande.</p>
+                      <p className="text-xs text-muted-foreground mt-1">— Fatoumata D. • 8 Avr 2026</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="flex items-center gap-1 mb-1">
+                        {[1,2,3,4,5].map(s => <Star key={s} className={`w-3.5 h-3.5 ${s <= 3 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />)}
+                      </div>
+                      <p className="text-sm font-medium">Correct mais délai long</p>
+                      <p className="text-xs text-muted-foreground">Produit conforme mais la livraison a pris 3 jours de plus.</p>
+                      <p className="text-xs text-muted-foreground mt-1">— Ibrahim S. • 2 Avr 2026</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Logout */}
           <button
             onClick={onLogout}
-            className="w-full flex items-center justify-center gap-2 p-4 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors mb-6"
+            className="w-full flex items-center justify-center gap-2 p-4 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors mb-6 cursor-pointer"
           >
             <LogOut className="w-5 h-5" />
             <span>Se déconnecter</span>

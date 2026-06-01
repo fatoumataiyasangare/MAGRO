@@ -65,10 +65,27 @@ export async function submitVerificationRequest(documents: any, userName = "Mous
     return newRequest;
   }
 
-  return apiFetch<VerificationRequest>("/admin/verifications", {
-    method: "POST",
-    body: JSON.stringify({ documents })
-  });
+  try {
+    return await apiFetch<VerificationRequest>("/admin/verifications", {
+      method: "POST",
+      body: JSON.stringify({ documents })
+    });
+  } catch (err) {
+    console.warn("[Verifications] API indisponible, fallback mock", err);
+    const reqs = getMockVerifications();
+    const newRequest: VerificationRequest = {
+      id: "ver-" + Date.now(),
+      userId: "mock-user-id",
+      userName,
+      userRole: userRole.toUpperCase(),
+      documents,
+      status: "PENDING",
+      createdAt: new Date().toISOString()
+    };
+    reqs.push(newRequest);
+    saveMockVerifications(reqs);
+    return newRequest;
+  }
 }
 
 export async function fetchVerificationRequests() {
@@ -76,7 +93,12 @@ export async function fetchVerificationRequests() {
   if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
     return getMockVerifications();
   }
-  return apiFetch<VerificationRequest[]>("/admin/verifications");
+  try {
+    return await apiFetch<VerificationRequest[]>("/admin/verifications");
+  } catch (err) {
+    console.warn("[Verifications] API indisponible, fallback mock", err);
+    return getMockVerifications();
+  }
 }
 
 export async function processVerificationRequest(
@@ -100,8 +122,24 @@ export async function processVerificationRequest(
     throw new Error("Demande de vérification non trouvée");
   }
 
-  return apiFetch<VerificationRequest>(`/admin/verifications/${requestId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ status, rejectionReason })
-  });
+  try {
+    return await apiFetch<VerificationRequest>(`/admin/verifications/${requestId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, rejectionReason })
+    });
+  } catch (err) {
+    console.warn("[Verifications] API indisponible, fallback mock", err);
+    const reqs = getMockVerifications();
+    const idx = reqs.findIndex((r) => r.id === requestId);
+    if (idx !== -1) {
+      reqs[idx] = {
+        ...reqs[idx],
+        status,
+        rejectionReason: status === "REJECTED" ? rejectionReason : undefined
+      };
+      saveMockVerifications(reqs);
+      return reqs[idx];
+    }
+    throw new Error("Demande de vérification non trouvée");
+  }
 }

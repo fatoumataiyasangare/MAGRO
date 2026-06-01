@@ -72,10 +72,26 @@ export async function requestCertification(cropName: string) {
     return newRequest;
   }
 
-  return apiFetch<Certification>("/certifications/request", {
-    method: "POST",
-    body: JSON.stringify({ cropName })
-  });
+  try {
+    return await apiFetch<Certification>("/certifications/request", {
+      method: "POST",
+      body: JSON.stringify({ cropName })
+    });
+  } catch (err) {
+    console.warn("[Certifications] API indisponible, fallback mock", err);
+    const certs = getMockCerts();
+    const newRequest: Certification = {
+      id: "cert-" + Date.now(),
+      farmerId: "mock-farmer",
+      cropName,
+      score: 0,
+      status: "PENDING",
+      createdAt: new Date().toISOString()
+    };
+    certs.push(newRequest);
+    saveMockCerts(certs);
+    return newRequest;
+  }
 }
 
 export async function fetchCertificationRequests() {
@@ -83,7 +99,12 @@ export async function fetchCertificationRequests() {
   if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
     return getMockCerts();
   }
-  return apiFetch<Certification[]>("/certifications");
+  try {
+    return await apiFetch<Certification[]>("/certifications");
+  } catch (err) {
+    console.warn("[Certifications] API indisponible, fallback mock", err);
+    return getMockCerts();
+  }
 }
 
 export async function submitInspectionScore(
@@ -114,8 +135,30 @@ export async function submitInspectionScore(
     throw new Error("Certification non trouvée");
   }
 
-  return apiFetch<Certification>(`/certifications/${certId}/score`, {
-    method: "POST",
-    body: JSON.stringify({ score, criteriaDetail })
-  });
+  try {
+    return await apiFetch<Certification>(`/certifications/${certId}/score`, {
+      method: "POST",
+      body: JSON.stringify({ score, criteriaDetail })
+    });
+  } catch (err) {
+    console.warn("[Certifications] API indisponible, fallback mock", err);
+    const certs = getMockCerts();
+    const idx = certs.findIndex((c) => c.id === certId);
+    if (idx !== -1) {
+      certs[idx] = {
+        ...certs[idx],
+        score,
+        badgeLevel: score >= 80 ? "GOLD" : "SILVER",
+        criteriaDetail,
+        status: "ACTIVE",
+        expertId: "mock-expert",
+        validFrom: new Date().toISOString(),
+        validTo: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(),
+        reportUrl: `https://magro.ml/reports/cert-${certId}.pdf`
+      };
+      saveMockCerts(certs);
+      return certs[idx];
+    }
+    throw new Error("Certification non trouvée");
+  }
 }

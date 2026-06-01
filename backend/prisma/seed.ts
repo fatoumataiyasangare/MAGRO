@@ -1,207 +1,159 @@
-import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcrypt";
+import { PrismaClient, UserRole, BuyerType } from '@prisma/client';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const hashedPass = await bcrypt.hash("magro-dev-seed-2026", 12);
+  console.log('Début du seed (amorçage) de la base de données MAGRO...');
 
-  // Create Farmer user
-  const farmer = await prisma.user.upsert({
-    where: { phone: "+22370000001" },
-    update: {},
-    create: {
-      phone: "+22370000001",
-      name: "Amadou Traoré",
-      passwordHash: hashedPass,
-      role: "FARMER",
-      region: "Sikasso",
+  // 1. Nettoyer la base (ordre inverse des dépendances pour éviter les erreurs de clés étrangères)
+  await prisma.auditLog.deleteMany();
+  await prisma.transportNegotiation.deleteMany();
+  await prisma.dispute.deleteMany();
+  await prisma.order.deleteMany();
+  await prisma.availabilityAlert.deleteMany();
+  await prisma.verificationRequest.deleteMany();
+  await prisma.seasonalContract.deleteMany();
+  await prisma.trustedPair.deleteMany();
+  await prisma.cooperativeMember.deleteMany();
+  await prisma.loginOtp.deleteMany();
+  await prisma.certification.deleteMany();
+  await prisma.listing.deleteMany();
+  await prisma.refreshToken.deleteMany();
+  await prisma.user.deleteMany();
+
+  // Hash standard pour les mots de passe de test (123456)
+  const passwordHash = await bcrypt.hash('123456', 10);
+
+  // 2. Création des Agriculteurs (FARMERS)
+  const farmer1 = await prisma.user.create({
+    data: {
+      phone: '+22370000001',
+      name: 'Amadou Traoré',
+      passwordHash,
+      role: UserRole.FARMER,
+      region: 'Sikasso',
       isVerified: true,
-      isPremium: false
-    }
+      rating: 4.8,
+    },
   });
 
-  // Create Buyer user
-  const buyer = await prisma.user.upsert({
-    where: { phone: "+22370000002" },
-    update: {},
-    create: {
-      phone: "+22370000002",
-      name: "Fatoumata Keita",
-      passwordHash: hashedPass,
-      role: "BUYER",
-      region: "Bamako",
-      buyerType: "TRADER",
+  const farmer2 = await prisma.user.create({
+    data: {
+      phone: '+22370000002',
+      name: 'Oumar Kéita',
+      passwordHash,
+      role: UserRole.FARMER,
+      region: 'Koulikoro',
       isVerified: false,
-      isPremium: true
-    }
+      rating: 4.5,
+    },
   });
 
-  // Create Expert user
-  const expert = await prisma.user.upsert({
-    where: { phone: "+22370000003" },
-    update: {},
-    create: {
-      phone: "+22370000003",
-      name: "Dr. Ibrahim CAA",
-      passwordHash: hashedPass,
-      role: "EXPERT",
-      region: "Bamako",
-      isVerified: true
-    }
-  });
-
-  // Create Moderator user
-  const moderator = await prisma.user.upsert({
-    where: { phone: "+22370000004" },
-    update: {},
-    create: {
-      phone: "+22370000004",
-      name: "Modérateur MAGRO",
-      passwordHash: hashedPass,
-      role: "MODERATOR",
-      region: "Bamako",
-      isVerified: true
-    }
-  });
-
-  // Create Industrial Buyer
-  const industry = await prisma.user.upsert({
-    where: { phone: "+22370000005" },
-    update: {},
-    create: {
-      phone: "+22370000005",
-      name: "Grands Moulins du Mali",
-      passwordHash: hashedPass,
-      role: "BUYER",
-      region: "Bamako",
-      buyerType: "INDUSTRY",
+  // 3. Création des Acheteurs (BUYERS)
+  const buyer1 = await prisma.user.create({
+    data: {
+      phone: '+22370000003',
+      name: 'Fatoumata K.',
+      passwordHash,
+      role: UserRole.BUYER,
+      buyerType: BuyerType.TRADER,
+      region: 'Bamako',
       isVerified: true,
-      isPremium: true
-    }
+      rating: 4.9,
+    },
   });
 
-  // Seed Listings
-  const listing1 = await prisma.listing.upsert({
-    where: { id: "listing-seed-1" },
-    update: {},
-    create: {
-      id: "listing-seed-1",
-      title: "Tomates fraîches",
-      description: "Tomates cultivées de manière écologique, récoltées ce matin.",
-      price: 750,
+  // 4. Création du Régulateur
+  const regulator = await prisma.user.create({
+    data: {
+      phone: '+22370000004',
+      name: 'Modérateur MAGRO',
+      passwordHash,
+      role: UserRole.MODERATOR,
+      region: 'Bamako',
+      isVerified: true,
+    },
+  });
+
+  console.log('✅ Utilisateurs créés.');
+
+  // 5. Création des Produits (Listings)
+  const listing1 = await prisma.listing.create({
+    data: {
+      title: 'Tomates Fraîches',
+      description: 'Belles tomates de la région de Sikasso',
+      price: 350,
       quantity: 500,
       quantityRemaining: 500,
-      region: "Sikasso",
-      image: "https://images.unsplash.com/photo-1758487405872-8e179dfe703e?w=400",
-      farmerId: farmer.id
-    }
+      unit: 'kg',
+      region: 'Sikasso',
+      image: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=800&auto=format&fit=crop&q=60',
+      farmerId: farmer1.id,
+    },
   });
 
-  const listing2 = await prisma.listing.upsert({
-    where: { id: "listing-seed-2" },
-    update: {},
-    create: {
-      id: "listing-seed-2",
-      title: "Oignons blancs",
-      description: "Oignons de qualité supérieure disponibles en gros.",
-      price: 500,
-      quantity: 800,
-      quantityRemaining: 800,
-      region: "Kayes",
-      image: "https://images.unsplash.com/photo-1534383346555-6cff1eaca960?w=400",
-      farmerId: farmer.id
-    }
+  const listing2 = await prisma.listing.create({
+    data: {
+      title: 'Oignons Blancs',
+      description: 'Oignons de conservation, très bonne qualité.',
+      price: 250,
+      quantity: 1000,
+      quantityRemaining: 1000,
+      unit: 'kg',
+      region: 'Koulikoro',
+      image: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=800&auto=format&fit=crop&q=60',
+      farmerId: farmer2.id,
+    },
   });
 
-  // Seed active Gold Certification for Tomates
-  await prisma.certification.upsert({
-    where: { id: "cert-seed-1" },
-    update: {},
-    create: {
-      id: "cert-seed-1",
-      farmerId: farmer.id,
-      expertId: expert.id,
-      cropName: "Tomates fraîches",
-      score: 87,
-      badgeLevel: "GOLD",
-      criteriaDetail: {
-        aspect: 27,
-        brix: 22,
-        hygiene: 18,
-        practices: 12,
-        traceability: 8
-      },
-      reportUrl: "https://magro.ml/reports/cert-seed-1.pdf",
-      validFrom: new Date(),
-      validTo: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000),
-      status: "ACTIVE"
-    }
+  const listing3 = await prisma.listing.create({
+    data: {
+      title: 'Mangues Kent',
+      description: 'Mangues douces pour exportation.',
+      price: 1500,
+      quantity: 300,
+      quantityRemaining: 300,
+      unit: 'kg',
+      region: 'Sikasso',
+      image: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=800&auto=format&fit=crop&q=60',
+      farmerId: farmer1.id,
+    },
   });
 
-  // Seed a pending verification request for buyer
-  await prisma.verificationRequest.upsert({
-    where: { id: "ver-seed-1" },
-    update: {},
-    create: {
-      id: "ver-seed-1",
-      userId: buyer.id,
-      documents: {
-        identityCardUrl: "CNI_Fatoumata_Keita.jpg",
-        gpsCoordinates: "12.6392° N, 8.0029° W"
-      },
-      status: "PENDING"
-    }
-  });
+  console.log('✅ Produits (Listings) créés.');
 
-  // Seed a sample order
-  const order1 = await prisma.order.upsert({
-    where: { id: "order-seed-1" },
-    update: {},
-    create: {
-      id: "order-seed-1",
-      buyerId: buyer.id,
+  // 6. Création des Commandes (Orders)
+  await prisma.order.create({
+    data: {
+      buyerId: buyer1.id,
       listingId: listing1.id,
       quantity: 50,
-      totalPrice: 37500,
-      status: "CONFIRMEE",
-      paymentStatus: "ESCROW",
-      depositRequired: false,
-      riskScore: 12
-    }
+      totalPrice: 50 * 350,
+      status: 'EN_ATTENTE',
+      paymentStatus: 'ESCROW', // Paiement séquestré
+    },
   });
 
-  // Seed a pending seasonal contract from industry to farmer
-  await prisma.seasonalContract.upsert({
-    where: { id: "contract-seed-1" },
-    update: {},
-    create: {
-      id: "contract-seed-1",
-      buyerId: industry.id,
-      farmerId: farmer.id,
-      cropName: "Tomates fraîches",
-      totalQuantityKg: 25000,
-      pricePerKg: 700,
-      seasonStart: new Date("2026-06-01"),
-      seasonEnd: new Date("2026-11-30"),
-      deliverySchedule: { type: "mensuel", details: "5000 kg par mois" },
-      status: "PENDING"
-    }
+  await prisma.order.create({
+    data: {
+      buyerId: buyer1.id,
+      listingId: listing2.id,
+      quantity: 100,
+      totalPrice: 100 * 250,
+      status: 'CONFIRMEE',
+      paymentStatus: 'ESCROW',
+    },
   });
 
-  console.log("✅ MAGRO Seed complete:");
-  console.log(`  Farmers: ${farmer.name} (+22370000001)`);
-  console.log(`  Buyers: ${buyer.name} (+22370000002), ${industry.name} (+22370000005)`);
-  console.log(`  Expert: ${expert.name} (+22370000003)`);
-  console.log(`  Moderator: ${moderator.name} (+22370000004)`);
-  console.log(`  Listings: ${listing1.title}, ${listing2.title}`);
-  console.log(`  Certification: Badge OR pour Tomates fraîches (score 87/100)`);
-  console.log(`  Contrat Saisonnier: GMM → ${farmer.name} (25t Tomates)`);
+  console.log('✅ Commandes (Orders) créées.');
+
+  console.log('🎉 Seed terminé avec succès ! Votre base Supabase est prête.');
 }
 
 main()
-  .catch((error) => {
-    console.error(error);
+  .catch((e) => {
+    console.error('Erreur lors du seed :', e);
     process.exit(1);
   })
   .finally(async () => {

@@ -11,6 +11,7 @@ import {
   securityLog,
   setRefreshCookie
 } from "../lib/security.js";
+import { sendSMS } from "../lib/sms.js";
 
 const router = Router();
 
@@ -61,8 +62,11 @@ router.post("/request-otp", async (req, res) => {
   });
 
   if (process.env.NODE_ENV !== "production") {
-    securityLog("otp_generated_development", { phone, codePreview: `${code.slice(0, 2)}****` });
+    console.log(`[DEV ONLY] OTP FULL CODE FOR ${phone}: ${code}`);
+    securityLog("otp_generated_development", { phone, codePreview: code });
   }
+
+  await sendSMS(phone, `Votre code de vérification MAGRO est : ${code}. Valable 5 minutes.`);
 
   res.status(200).json({ message: "OTP envoye" });
 });

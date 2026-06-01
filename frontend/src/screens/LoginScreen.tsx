@@ -1,16 +1,17 @@
 import { useState } from "react";
-import { Phone, ArrowRight } from "lucide-react";
+import { Phone, ArrowRight, ArrowLeft } from "lucide-react";
 import { motion } from "motion/react";
 import logoMagro from "../assets/MAGRO.png";
 import { requestOtp, verifyOtp } from "../services/auth";
 import { signInWithGoogle } from "../services/googleAuthService";
 import { validateMalianPhone } from "../services/phoneValidation";
 
-interface LoginSignupMVPProps {
+interface LoginScreenProps {
   onComplete: () => void;
+  onBack: () => void;
 }
 
-export default function LoginSignupMVP({ onComplete }: LoginSignupMVPProps) {
+export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -19,18 +20,14 @@ export default function LoginSignupMVP({ onComplete }: LoginSignupMVPProps) {
 
   const handlePhoneContinue = async () => {
     setErrorMessage("");
-    
-    // Valider le numéro de téléphone malien
     const validation = validateMalianPhone(phoneNumber);
     if (!validation.isValid) {
       setErrorMessage(validation.error || "Veuillez saisir un numéro de téléphone malien valide.");
       return;
     }
-
-    // Utiliser le numéro formaté
     const formattedPhone = validation.formattedPhone || phoneNumber;
+    setPhoneNumber(formattedPhone);
     setIsLoading(true);
-
     try {
       await requestOtp(formattedPhone);
       setStep("otp");
@@ -90,22 +87,32 @@ export default function LoginSignupMVP({ onComplete }: LoginSignupMVPProps) {
     <div className="h-screen bg-white flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto flex flex-col justify-center px-6 py-8 max-w-md mx-auto w-full">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="my-auto">
+
+          {/* Back button */}
+          <button
+            onClick={step === "otp" ? () => setStep("phone") : onBack}
+            className="mb-6 p-2 hover:bg-gray-100 rounded-xl transition-colors active:scale-95 inline-flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Retour
+          </button>
+
           <img
             src={logoMagro}
             alt="MAGRO"
-            className="w-56 mx-auto mb-12"
+            className="w-40 mx-auto mb-8"
             style={{ mixBlendMode: "multiply" }}
           />
 
           {step === "phone" ? (
             <div className="space-y-6">
-              <div className="text-center mb-8">
-                <h1 className="text-2xl mb-2">Bienvenue</h1>
-                <p className="text-muted-foreground">Connectez-vous ou créez un compte</p>
+              <div className="text-center mb-6">
+                <h1 className="text-2xl font-bold mb-2">Connexion</h1>
+                <p className="text-muted-foreground text-sm">Entrez votre numéro pour vous connecter</p>
               </div>
 
               <div>
-                <label className="block text-sm mb-2">Numéro de téléphone</label>
+                <label className="block text-sm font-medium mb-2">Numéro de téléphone</label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
                   <input
@@ -121,10 +128,10 @@ export default function LoginSignupMVP({ onComplete }: LoginSignupMVPProps) {
               <button
                 onClick={handlePhoneContinue}
                 disabled={phoneNumber.length < 8 || isLoading}
-                className="w-full bg-secondary hover:bg-secondary/90 text-white py-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-secondary hover:bg-secondary/90 active:scale-[0.98] text-white py-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
               >
-                <span>Continuer</span>
-                <ArrowRight className="w-5 h-5" />
+                {isLoading ? "Envoi en cours..." : "Recevoir le code"}
+                {!isLoading && <ArrowRight className="w-5 h-5" />}
               </button>
 
               {errorMessage && <p className="text-sm text-destructive text-center">{errorMessage}</p>}
@@ -138,10 +145,10 @@ export default function LoginSignupMVP({ onComplete }: LoginSignupMVPProps) {
                 </div>
               </div>
 
-              <button 
+              <button
                 onClick={handleGoogleSignIn}
                 disabled={isLoading}
-                className="w-full bg-white border-2 border-border hover:bg-muted/50 py-4 rounded-xl flex items-center justify-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-white border-2 border-border hover:bg-muted/50 active:scale-[0.98] py-4 rounded-xl flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -155,8 +162,8 @@ export default function LoginSignupMVP({ onComplete }: LoginSignupMVPProps) {
           ) : (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
               <div className="text-center mb-8">
-                <h2 className="text-2xl mb-2">Code de vérification</h2>
-                <p className="text-muted-foreground">Code envoyé au {phoneNumber}</p>
+                <h2 className="text-2xl font-bold mb-2">Code de vérification</h2>
+                <p className="text-muted-foreground text-sm">Code envoyé au {phoneNumber}</p>
               </div>
 
               <div className="flex justify-center gap-2 mb-8">
@@ -175,9 +182,9 @@ export default function LoginSignupMVP({ onComplete }: LoginSignupMVPProps) {
                 ))}
               </div>
 
-              {errorMessage && <p className="text-sm text-destructive text-center">{errorMessage}</p>}
+              {errorMessage && <p className="text-sm text-destructive text-center mb-4">{errorMessage}</p>}
 
-              <button onClick={() => setStep("phone")} className="text-primary text-sm mx-auto block">
+              <button onClick={() => setStep("phone")} className="text-primary text-sm mx-auto block hover:underline">
                 Modifier le numéro
               </button>
             </motion.div>

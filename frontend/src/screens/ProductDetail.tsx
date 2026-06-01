@@ -71,7 +71,7 @@ export default function ProductDetailMVP({ product, onBack, onOrder, onChat }: P
         />
         <button
           onClick={onBack}
-          className="absolute top-6 left-6 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg"
+          className="absolute top-6 left-6 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg active:scale-90 hover:scale-105 transition-all"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -199,13 +199,13 @@ export default function ProductDetailMVP({ product, onBack, onOrder, onChat }: P
         <div className="flex gap-3">
           <button
             onClick={onChat}
-            className="flex-shrink-0 w-14 h-14 bg-muted rounded-xl flex items-center justify-center hover:bg-muted/80 transition-colors"
+            className="flex-shrink-0 w-14 h-14 bg-muted rounded-xl flex items-center justify-center hover:bg-gray-200 active:scale-95 transition-all"
           >
             <MessageCircle className="w-6 h-6 text-gray-700" />
           </button>
           <button
             onClick={onOrder}
-            className="flex-1 bg-secondary hover:bg-secondary/90 text-white py-4 rounded-xl transition-colors font-semibold text-sm"
+            className="flex-1 bg-secondary hover:bg-secondary/90 hover:shadow-lg active:scale-[0.98] text-white py-4 rounded-xl transition-all font-semibold text-sm"
           >
             Commander maintenant
           </button>

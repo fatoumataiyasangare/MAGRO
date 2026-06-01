@@ -125,7 +125,7 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-gray-100 text-foreground;
   }
 
   /**
@@ -177,5 +177,12 @@
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
+  }
+
+  button,
+  a,
+  [role="button"],
+  select {
+    cursor: pointer;
   }
 }
