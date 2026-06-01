@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, CheckCircle, Clock, AlertCircle, ShieldAlert, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { fetchFarmerOrders, FarmerOrder, updateOrderStatus, confirmDelivery } from "../../../services/orders";
-import { openDispute } from "../../../services/disputes";
+import { fetchFarmerOrders, FarmerOrder, updateOrderStatus, confirmDelivery } from "../services/orders";
+import { openDispute } from "../services/disputes";
 
 interface Order {
   id: string;

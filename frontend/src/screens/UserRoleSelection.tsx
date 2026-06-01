@@ -1,6 +1,6 @@
 import { ShoppingBag, Sprout, Monitor } from "lucide-react";
 import { motion } from "motion/react";
-import logoMagro from "../../../imports/MAGRO.png";
+import logoMagro from "../assets/MAGRO.png";
 
 interface UserRoleSelectionMVPProps {
   onSelectRole: (role: "buyer" | "farmer" | "regulator") => void;

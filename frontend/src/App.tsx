@@ -1,33 +1,33 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import SplashScreenMVP from "./components/mvp/SplashScreenMVP";
-import LoginSignupMVP from "./components/mvp/LoginSignupMVP";
-import UserRoleSelectionMVP from "./components/mvp/UserRoleSelectionMVP";
-import MarketplaceHomeMVP from "./components/mvp/MarketplaceHomeMVP";
-import ProductDetailMVP from "./components/mvp/ProductDetailMVP";
-import OrderScreenMVP from "./components/mvp/OrderScreenMVP";
-import FarmerDashboardMVP from "./components/mvp/FarmerDashboardMVP";
-import CreateProductScreen from "./components/mvp/CreateProductScreen";
-import MyListingsScreen from "./components/mvp/MyListingsScreen";
-import ProjectorsRegulatorsScreen from "./components/mvp/ProjectorsRegulatorsScreen";
-import ChatScreenMVP from "./components/mvp/ChatScreenMVP";
-import ProfileScreenMVP from "./components/mvp/ProfileScreenMVP";
-import OrdersScreenMVP from "./components/mvp/OrdersScreenMVP";
-import { Product } from "./components/mvp/MarketplaceHomeMVP";
+import SplashScreen from "./screens/SplashScreen";
+import LoginSignup from "./screens/LoginSignup";
+import UserRoleSelection from "./screens/UserRoleSelection";
+import MarketplaceHome from "./screens/MarketplaceHome";
+import ProductDetail from "./screens/ProductDetail";
+import OrderScreen from "./screens/OrderScreen";
+import FarmerDashboard from "./screens/FarmerDashboard";
+import CreateProductScreen from "./screens/CreateProductScreen";
+import MyListingsScreen from "./screens/MyListingsScreen";
+import ProjectorsRegulatorsScreen from "./screens/ProjectorsRegulatorsScreen";
+import ChatScreen from "./screens/ChatScreen";
+import ProfileScreen from "./screens/ProfileScreen";
+import OrdersScreen from "./screens/OrdersScreen";
+import { Product } from "./screens/MarketplaceHome";
 import {
   fetchProfile,
   logout as logoutUser,
   updateRole,
   UserProfile
-} from "../services/auth";
+} from "./services/auth";
 import {
   createListing,
   deleteListing,
   fetchListings,
   fetchMyListings,
   ListingItem
-} from "../services/listings";
-import { placeOrder } from "../services/orders";
+} from "./services/listings";
+import { placeOrder } from "./services/orders";
 
 type Screen =
   | "splash"
@@ -58,7 +58,7 @@ function mapListingToProduct(listing: ListingItem): Product {
   };
 }
 
-export default function AppMVP() {
+export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("splash");
   const [userRole, setUserRole] = useState<"buyer" | "farmer" | "regulator" | null>(null);
   const [userName, setUserName] = useState("Moussa");
@@ -255,7 +255,7 @@ export default function AppMVP() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <SplashScreenMVP />
+            <SplashScreen />
           </motion.div>
         )}
 
@@ -267,7 +267,7 @@ export default function AppMVP() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <LoginSignupMVP onComplete={handleLoginComplete} />
+            <LoginSignup onComplete={handleLoginComplete} />
           </motion.div>
         )}
 
@@ -279,7 +279,7 @@ export default function AppMVP() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <UserRoleSelectionMVP onSelectRole={handleRoleSelect} />
+            <UserRoleSelection onSelectRole={handleRoleSelect} />
           </motion.div>
         )}
 
@@ -291,7 +291,7 @@ export default function AppMVP() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <MarketplaceHomeMVP
+            <MarketplaceHome
               products={listings}
               onProductClick={handleProductClick}
               onNavigate={handleNavigate}
@@ -307,7 +307,7 @@ export default function AppMVP() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <ProductDetailMVP
+            <ProductDetail
               product={selectedProduct}
               onBack={handleBackToHome}
               onOrder={handleOrderClick}
@@ -324,7 +324,7 @@ export default function AppMVP() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <OrderScreenMVP
+            <OrderScreen
               product={selectedProduct}
               onBack={() => setCurrentScreen("product-detail")}
               onConfirm={handleOrderConfirm}
@@ -340,7 +340,7 @@ export default function AppMVP() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <FarmerDashboardMVP
+            <FarmerDashboard
               userName={userName}
               onNavigate={handleNavigate}
               totalProducts={farmerProducts.length}
@@ -404,7 +404,7 @@ export default function AppMVP() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <ChatScreenMVP
+            <ChatScreen
               onBack={handleBackToHome}
               contactName={selectedProduct?.farmer}
             />
@@ -419,7 +419,7 @@ export default function AppMVP() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <ProfileScreenMVP
+            <ProfileScreen
               userName={userName}
               userRole={userRole}
               onBack={handleBackToHome}
@@ -435,7 +435,7 @@ export default function AppMVP() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <OrdersScreenMVP onBack={handleBackToHome} userRole={userRole} />
+            <OrdersScreen onBack={handleBackToHome} userRole={userRole} />
           </motion.div>
         )}
       </AnimatePresence>

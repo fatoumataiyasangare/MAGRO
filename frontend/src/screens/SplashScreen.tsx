@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import logoMagro from "../../../imports/MAGRO.png";
+import logoMagro from "../assets/MAGRO.png";
 
 export default function SplashScreenMVP() {
   return (
