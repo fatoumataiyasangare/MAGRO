@@ -3,11 +3,28 @@ import bcrypt from "bcrypt";
 import prisma from "../lib/prisma.js";
 import { z } from "zod";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../lib/jwt.js";
+import {
+  clearRefreshCookie,
+  getClientIp,
+  hashToken,
+  phoneSchema,
+  securityLog,
+  setRefreshCookie
+} from "../lib/security.js";
 
 const router = Router();
 
-const requestOtpSchema = z.object({ phone: z.string().min(3) });
-const verifyOtpSchema = z.object({ phone: z.string().min(3), otp: z.string().length(6) });
+const requestOtpSchema = z.object({ phone: phoneSchema });
+const verifyOtpSchema = z.object({ phone: phoneSchema, otp: z.string().regex(/^\d{6}$/) });
+
+function publicUser(user: { id: string; phone: string; name: string; role: string }) {
+  return {
+    id: user.id,
+    phone: user.phone,
+    name: user.name,
+    role: user.role
+  };
+}
 
 router.post("/request-otp", async (req, res) => {
   const parseResult = requestOtpSchema.safeParse(req.body);
@@ -16,16 +33,38 @@ router.post("/request-otp", async (req, res) => {
   }
 
   const { phone } = parseResult.data;
+
+  await prisma.loginOtp.deleteMany({
+    where: {
+      phone,
+      OR: [
+        { expiresAt: { lt: new Date() } },
+        { createdAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } }
+      ]
+    }
+  });
+
+  const recentOtpCount = await prisma.loginOtp.count({
+    where: { phone, createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) } }
+  });
+  if (recentOtpCount >= 3) {
+    securityLog("otp_rate_limited", { phone, ip: getClientIp(req) });
+    return res.status(429).json({ error: "Too many requests" });
+  }
+
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const codeHash = await bcrypt.hash(code, 10);
+  const codeHash = await bcrypt.hash(code, 12);
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
   await prisma.loginOtp.create({
     data: { phone, codeHash, expiresAt }
   });
 
-  console.log(`OTP for ${phone}: ${code}`);
-  res.status(200).json({ message: "OTP envoyé" });
+  if (process.env.NODE_ENV !== "production") {
+    securityLog("otp_generated_development", { phone, codePreview: `${code.slice(0, 2)}****` });
+  }
+
+  res.status(200).json({ message: "OTP envoye" });
 });
 
 router.post("/verify-otp", async (req, res) => {
@@ -37,12 +76,14 @@ router.post("/verify-otp", async (req, res) => {
   const { phone, otp } = parseResult.data;
   const otpRecord = await prisma.loginOtp.findFirst({ where: { phone }, orderBy: { createdAt: "desc" } });
   if (!otpRecord || otpRecord.expiresAt < new Date()) {
-    return res.status(400).json({ error: "Code OTP invalide ou expiré" });
+    securityLog("otp_verification_failed", { phone, reason: "missing_or_expired", ip: getClientIp(req) });
+    return res.status(400).json({ error: "Invalid verification code" });
   }
 
   const isValid = await bcrypt.compare(otp, otpRecord.codeHash);
   if (!isValid) {
-    return res.status(400).json({ error: "Code OTP invalide" });
+    securityLog("otp_verification_failed", { phone, reason: "invalid_code", ip: getClientIp(req) });
+    return res.status(400).json({ error: "Invalid verification code" });
   }
 
   await prisma.loginOtp.deleteMany({ where: { phone } });
@@ -52,65 +93,112 @@ router.post("/verify-otp", async (req, res) => {
     update: {},
     create: {
       phone,
-      name: `Utilisateur ${phone.slice(-4)}`
+      name: `Utilisateur ${phone.slice(-4)}`,
+      passwordHash: await bcrypt.hash(`otp-only:${phone}:${Date.now()}`, 12),
+      region: "UNKNOWN"
     }
   });
 
   const accessToken = signAccessToken({ userId: user.id, role: user.role, name: user.name, phone: user.phone });
-  const refreshToken = signRefreshToken({ userId: user.id });
+  const refreshToken = signRefreshToken(user.id);
 
   await prisma.refreshToken.create({
     data: {
-      token: refreshToken,
+      id: refreshToken.tokenId,
+      tokenHash: hashToken(refreshToken.token),
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      userId: user.id
+      userId: user.id,
+      userAgent: req.headers["user-agent"],
+      ipAddress: getClientIp(req)
     }
   });
 
-  res.cookie("refreshToken", refreshToken, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 7 * 24 * 60 * 60 * 1000
-  });
+  setRefreshCookie(res, refreshToken.token);
+  securityLog("login_success", { userId: user.id, ip: getClientIp(req) });
 
-  res.json({ user, accessToken });
+  res.json({ user: publicUser(user), accessToken });
 });
 
 router.post("/refresh", async (req, res) => {
   const token = req.cookies.refreshToken;
   if (!token) {
-    return res.status(401).json({ error: "Missing refresh token" });
-  }
-
-  const refreshRecord = await prisma.refreshToken.findUnique({ where: { token } });
-  if (!refreshRecord || refreshRecord.expiresAt < new Date()) {
-    return res.status(401).json({ error: "Refresh token expired" });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const decoded = verifyRefreshToken(token) as { userId: string };
-    const { userId } = decoded;
+    const decoded = verifyRefreshToken(token) as { userId: string; tokenId: string };
+    const tokenHash = hashToken(token);
+    const refreshRecord = await prisma.refreshToken.findUnique({ where: { id: decoded.tokenId } });
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      return res.status(401).json({ error: "User not found" });
+    if (!refreshRecord || refreshRecord.expiresAt < new Date() || refreshRecord.revokedAt) {
+      securityLog("refresh_token_reuse_or_expired", { tokenId: decoded.tokenId, userId: decoded.userId, ip: getClientIp(req) });
+      await prisma.refreshToken.updateMany({
+        where: { userId: decoded.userId, revokedAt: null },
+        data: { revokedAt: new Date() }
+      });
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
+    if (refreshRecord.tokenHash !== tokenHash) {
+      securityLog("refresh_token_hash_mismatch", { tokenId: decoded.tokenId, userId: decoded.userId, ip: getClientIp(req) });
+      await prisma.refreshToken.updateMany({
+        where: { userId: decoded.userId, revokedAt: null },
+        data: { revokedAt: new Date() }
+      });
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const nextRefreshToken = signRefreshToken(user.id);
+    await prisma.$transaction([
+      prisma.refreshToken.create({
+        data: {
+          id: nextRefreshToken.tokenId,
+          tokenHash: hashToken(nextRefreshToken.token),
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          userId: user.id,
+          userAgent: req.headers["user-agent"],
+          ipAddress: getClientIp(req)
+        }
+      }),
+      prisma.refreshToken.update({
+        where: { id: refreshRecord.id },
+        data: { revokedAt: new Date(), replacedByTokenId: nextRefreshToken.tokenId }
+      })
+    ]);
+
     const accessToken = signAccessToken({ userId: user.id, role: user.role, name: user.name, phone: user.phone });
+    setRefreshCookie(res, nextRefreshToken.token);
     return res.json({ accessToken });
   } catch {
-    return res.status(401).json({ error: "Invalid refresh token" });
+    clearRefreshCookie(res);
+    return res.status(401).json({ error: "Unauthorized" });
   }
 });
 
 router.post("/logout", async (req, res) => {
   const token = req.cookies.refreshToken;
   if (token) {
-    await prisma.refreshToken.deleteMany({ where: { token } });
+    try {
+      const decoded = verifyRefreshToken(token) as { userId: string; tokenId: string };
+      await prisma.refreshToken.updateMany({
+        where: { id: decoded.tokenId },
+        data: { revokedAt: new Date() }
+      });
+      securityLog("logout", { userId: decoded.userId, ip: getClientIp(req) });
+    } catch {
+      securityLog("logout_invalid_token", { ip: getClientIp(req) });
+    }
   }
-  res.clearCookie("refreshToken");
-  res.status(200).json({ message: "Déconnecté" });
+
+  clearRefreshCookie(res);
+  res.status(200).json({ message: "Disconnected" });
 });
 
 export default router;

@@ -10,58 +10,267 @@ datasource db {
 enum UserRole {
   BUYER
   FARMER
-  REGULATOR
+  COOPERATIVE
+  EXPERT
+  MODERATOR
+  ANALYST
+  SUPER_ADMIN
+}
+
+enum BuyerType {
+  INDIVIDUAL
+  TRADER
+  RESTAURANT
+  INSTITUTION
+  INDUSTRY
+}
+
+enum BadgeLevel {
+  GOLD
+  SILVER
+}
+
+enum CertificationStatus {
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+}
+
+enum DisputeStatus {
+  NEW
+  IN_REVIEW
+  AWAITING_EVIDENCE
+  PENDING_REINSPECTION
+  RESOLVED
+}
+
+enum DisputeDecision {
+  FARMER_WINS
+  BUYER_WINS
+  SPLIT
+  REINSPECTION
+  PARTIAL_REFUND
+}
+
+enum VerificationStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum SeasonalContractStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
 }
 
 model User {
-  id            String         @id @default(uuid())
-  phone         String         @unique
-  name          String
-  role          UserRole       @default(BUYER)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  refreshTokens RefreshToken[]
-  listings      Listing[]
-  orders        Order[]        @relation("BuyerOrders")
-  auditLogs     AuditLog[]
+  id                    String                 @id @default(uuid())
+  phone                 String                 @unique
+  name                  String
+  email                 String?                @unique
+  passwordHash          String
+  role                  UserRole               @default(BUYER)
+  buyerType             BuyerType?
+  region                String
+  isVerified            Boolean                @default(false)
+  isPremium             Boolean                @default(false)
+  rating                Decimal                @default(0) @db.Decimal(2, 1)
+  deliveryRate          Decimal                @default(100) @db.Decimal(5, 2)
+  disputeCount30d       Int                    @default(0)
+  suspensionUntil       DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  refreshTokens         RefreshToken[]
+  listings              Listing[]
+  orders                Order[]                @relation("BuyerOrders")
+  
+  expertCertifications  Certification[]        @relation("ExpertCertifications")
+  farmerCertifications  Certification[]        @relation("FarmerCertifications")
+  financedCertifications Certification[]        @relation("FinancedCertifications")
+  
+  disputesOpened        Dispute[]              @relation("DisputesOpened")
+  disputesAssigned      Dispute[]              @relation("DisputesAssigned")
+  disputesDecided       Dispute[]              @relation("DisputesDecided")
+  
+  verificationRequests  VerificationRequest[]  @relation("UserVerifications")
+  reviewedVerifications VerificationRequest[]  @relation("ReviewerVerifications")
+  
+  alerts                AvailabilityAlert[]
+  buyerContracts        SeasonalContract[]     @relation("BuyerContracts")
+  farmerContracts       SeasonalContract[]     @relation("FarmerContracts")
+  
+  trustedPairsFarmer    TrustedPair[]          @relation("TrustedPairsFarmer")
+  trustedPairsBuyer     TrustedPair[]          @relation("TrustedPairsBuyer")
+  
+  cooperativeMembers    CooperativeMember[]    @relation("CooperativeRelation")
+  memberOfCooperatives  CooperativeMember[]    @relation("MemberRelation")
+  
+  auditLogs             AuditLog[]
 }
 
 model RefreshToken {
-  id         String   @id @default(uuid())
-  token      String   @unique
-  expiresAt  DateTime
-  user       User     @relation(fields: [userId], references: [id])
-  userId     String
-  createdAt  DateTime @default(now())
+  id                String    @id @default(uuid())
+  tokenHash         String    @unique
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  replacedByTokenId String?
+  userAgent         String?
+  ipAddress         String?
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+  createdAt         DateTime  @default(now())
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
 }
 
 model Listing {
-  id          String   @id @default(uuid())
-  title       String
-  description String
-  price       Int
-  quantity    Int
-  unit        String   @default("kg")
-  region      String
-  image       String
-  farmer      User     @relation(fields: [farmerId], references: [id])
-  farmerId    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  orders      Order[]
+  id                 String         @id @default(uuid())
+  title              String
+  description        String
+  price              Int
+  quantity           Int
+  quantityRemaining  Int            @default(0)
+  unit               String         @default("kg")
+  region             String
+  image              String
+  imageUrls          String[]
+  farmer             User           @relation(fields: [farmerId], references: [id])
+  farmerId           String
+  certificationId    String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  
+  orders             Order[]
+}
+
+model Certification {
+  id                String              @id @default(uuid())
+  farmer            User                @relation("FarmerCertifications", fields: [farmerId], references: [id])
+  farmerId          String
+  expert            User                @relation("ExpertCertifications", fields: [expertId], references: [id])
+  expertId          String
+  cropName          String
+  score             Int
+  badgeLevel        BadgeLevel
+  criteriaDetail    Json
+  reportUrl         String
+  validFrom         DateTime
+  validTo           DateTime
+  status            CertificationStatus @default(ACTIVE)
+  financedByBuyer   User?               @relation("FinancedCertifications", fields: [financedByBuyerId], references: [id])
+  financedByBuyerId String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 }
 
 model Order {
-  id         String   @id @default(uuid())
-  buyer      User     @relation("BuyerOrders", fields: [buyerId], references: [id])
-  buyerId    String
-  listing    Listing  @relation(fields: [listingId], references: [id])
-  listingId  String
-  quantity   Int
-  totalPrice Int
-  status     String   @default("EN_ATTENTE")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                String            @id @default(uuid())
+  buyer             User              @relation("BuyerOrders", fields: [buyerId], references: [id])
+  buyerId           String
+  listing           Listing           @relation(fields: [listingId], references: [id])
+  listingId         String
+  quantity          Int
+  totalPrice        Int
+  depositAmount     Int?
+  depositRequired   Boolean           @default(false)
+  riskScore         Int               @default(0)
+  status            String            @default("EN_ATTENTE") // pending, confirmed, in_production, ready, delivered, cancelled, disputed
+  paymentStatus     String            @default("UNPAID") // unpaid, deposit_paid, escrow, released, refunded, partial_refund
+  deliveryDate      DateTime?
+  isRecurring       Boolean           @default(false)
+  recurringInterval String?           // weekly, monthly
+  confirmedAt       DateTime?
+  deliveredAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  disputes          Dispute[]
+}
+
+model Dispute {
+  id             String           @id @default(uuid())
+  order          Order            @relation(fields: [orderId], references: [id])
+  orderId        String
+  openedByUser   User             @relation("DisputesOpened", fields: [openedBy], references: [id])
+  openedBy       String
+  assignedToUser User?            @relation("DisputesAssigned", fields: [assignedTo], references: [id])
+  assignedTo     String?
+  reason         String
+  status         DisputeStatus    @default(NEW)
+  evidenceFarmer Json?
+  evidenceBuyer  Json?
+  adminDecision  DisputeDecision?
+  splitRatio     Decimal?         @db.Decimal(4, 2)
+  decisionNote   String?
+  decidedByUser  User?            @relation("DisputesDecided", fields: [decidedBy], references: [id])
+  decidedBy      String?
+  resolvedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model VerificationRequest {
+  id              String             @id @default(uuid())
+  user            User               @relation("UserVerifications", fields: [userId], references: [id])
+  userId          String
+  documents       Json
+  status          VerificationStatus @default(PENDING)
+  reviewedByUser  User?              @relation("ReviewerVerifications", fields: [reviewedBy], references: [id])
+  reviewedBy      String?
+  rejectionReason String?
+  createdAt       DateTime           @default(now())
+  reviewedAt      DateTime?
+}
+
+model AvailabilityAlert {
+  id                 String    @id @default(uuid())
+  buyer              User      @relation(fields: [buyerId], references: [id])
+  buyerId            String
+  cropName           String
+  region             String?
+  notifiedPremiumAt  DateTime?
+  notifiedStandardAt DateTime?
+  createdAt          DateTime  @default(now())
+}
+
+model SeasonalContract {
+  id               String                 @id @default(uuid())
+  buyer            User                   @relation("BuyerContracts", fields: [buyerId], references: [id])
+  buyerId          String
+  farmer           User                   @relation("FarmerContracts", fields: [farmerId], references: [id])
+  farmerId         String
+  cropName         String
+  totalQuantityKg  Int
+  pricePerKg       Int
+  seasonStart      DateTime
+  seasonEnd        DateTime
+  deliverySchedule Json
+  status           SeasonalContractStatus @default(PENDING)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+}
+
+model TrustedPair {
+  id          String   @id @default(uuid())
+  farmer      User     @relation("TrustedPairsFarmer", fields: [farmerId], references: [id])
+  farmerId    String
+  buyer       User     @relation("TrustedPairsBuyer", fields: [buyerId], references: [id])
+  buyerId     String
+  qualifiedAt DateTime @default(now())
+}
+
+model CooperativeMember {
+  id            String   @id @default(uuid())
+  cooperative   User     @relation("CooperativeRelation", fields: [cooperativeId], references: [id])
+  cooperativeId String
+  member        User     @relation("MemberRelation", fields: [memberId], references: [id])
+  memberId      String
+  joinedAt      DateTime @default(now())
 }
 
 model LoginOtp {
@@ -74,11 +283,22 @@ model LoginOtp {
 
 model AuditLog {
   id        String   @id @default(uuid())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
   action    String
   entity    String
   entityId  String?
   metadata  Json?
   createdAt DateTime @default(now())
+}
+
+model InstitutionalApiKey {
+  id          String   @id @default(uuid())
+  partnerName String
+  apiKeyHash  String
+  quotaPerDay Int
+  isActive    Boolean  @default(true)
+  createdBy   String
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
 }

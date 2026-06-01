@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # Copy source files
 COPY . .
@@ -16,15 +16,16 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Run
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
+ENV NODE_ENV=production
 
 # Copy package files
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm ci --only=production
+RUN npm install --omit=dev && npm cache clean --force
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist ./dist
@@ -37,6 +38,8 @@ RUN npx prisma generate
 
 # Expose port 4000
 EXPOSE 4000
+
+USER node
 
 # Start the application
 CMD ["node", "dist/index.js"]

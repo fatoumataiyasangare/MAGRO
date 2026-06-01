@@ -29,8 +29,8 @@ function loadConfig(): AppConfig {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
   const smsApiEnabled = import.meta.env.VITE_SMS_API_ENABLED === "true";
   const googleAuthEnabled = import.meta.env.VITE_GOOGLE_AUTH_ENABLED === "true";
-  const mockDataEnabled = import.meta.env.VITE_MOCK_DATA_ENABLED !== "false"; // true par défaut
   const isDevelopment = import.meta.env.MODE !== "production";
+  const mockDataEnabled = isDevelopment && import.meta.env.VITE_MOCK_DATA_ENABLED === "true";
 
   // Vérifier si l'API backend est disponible
   const isApiAvailable = apiBaseUrl !== "" && apiBaseUrl !== "undefined";

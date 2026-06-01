@@ -1,47 +1,48 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: magro-postgres
     environment:
-      POSTGRES_USER: magro_user
-      POSTGRES_PASSWORD: magro_password
-      POSTGRES_DB: magro
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-magro}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - magro-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U magro_user"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 5
+    security_opt:
+      - no-new-privileges:true
 
-  # Backend API
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: magro-backend
     environment:
-      DATABASE_URL: postgresql://magro_user:magro_password@postgres:5432/magro
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       PORT: 4000
       NODE_ENV: production
-      JWT_SECRET: magro-production-secret-key-change-in-production
-      CLIENT_ORIGIN: http://localhost:80
-      SMS_API_ENABLED: "false"
-      SMS_API_KEY: ""
-      SMS_API_URL: ""
-      SMS_SENDER_ID: MAGRO
-      GOOGLE_CLIENT_ID: ""
-      GOOGLE_CLIENT_SECRET: ""
-      GOOGLE_REDIRECT_URI: http://localhost/auth/google/callback
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?ACCESS_TOKEN_SECRET is required}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET is required}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:?CLIENT_ORIGIN is required}
+      SMS_API_ENABLED: ${SMS_API_ENABLED:-false}
+      SMS_API_KEY: ${SMS_API_KEY:-}
+      SMS_API_URL: ${SMS_API_URL:-}
+      SMS_SENDER_ID: ${SMS_SENDER_ID:-MAGRO}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,28 +54,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
 
-  # Frontend
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: magro-frontend
-    environment:
-      VITE_API_BASE_URL: http://backend:4000/api/v1
-      VITE_MOCK_DATA_ENABLED: "true"
-      VITE_SMS_API_ENABLED: "false"
-      VITE_SMS_API_KEY: ""
-      VITE_SMS_API_URL: ""
-      VITE_GOOGLE_AUTH_ENABLED: "false"
-      VITE_GOOGLE_CLIENT_ID: ""
     ports:
-      - "80:80"
+      - "80:8080"
     depends_on:
       backend:
         condition: service_healthy
     networks:
       - magro-network
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   postgres_data:
