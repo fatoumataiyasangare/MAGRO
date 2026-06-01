@@ -1,7 +1,7 @@
 import { ArrowLeft, Settings, LogOut, ChevronRight, Star, Shield, Zap, Check } from "lucide-react";
 import { motion } from "motion/react";
 import { useState, useEffect } from "react";
-import { submitVerificationRequest } from "../../../services/verifications";
+import { submitVerificationRequest } from "../services/verifications";
 
 interface ProfileScreenMVPProps {
   userName: string;

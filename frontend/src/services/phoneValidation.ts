@@ -45,7 +45,7 @@ function formatMalianPhone(phone: string): string {
  */
 function isValidMalianPrefix(prefix: string): boolean {
   const prefixNum = parseInt(prefix, 10);
-  return prefixNum >= 20 && prefixNum <= 79;
+  return prefixNum >= 20 && prefixNum <= 99;
 }
 
 /**

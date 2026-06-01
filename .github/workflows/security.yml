@@ -1,0 +1,55 @@
+name: Security Gate
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: npm install
+        working-directory: backend
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build backend
+        run: npm run build
+        working-directory: backend
+
+      - name: Dependency audit frontend
+        run: npm audit --audit-level=high
+
+      - name: Dependency audit backend
+        run: npm audit --audit-level=high
+        working-directory: backend
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: CodeQL init
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - name: CodeQL analyze
+        uses: github/codeql-action/analyze@v3

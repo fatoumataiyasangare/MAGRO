@@ -1,8 +1,8 @@
 import { Plus, Package, Bell, Home as HomeIcon, MessageCircle, User, List, Award, FileSpreadsheet, Check, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
-import { fetchMyContracts, updateContractStatus, SeasonalContract } from "../../../services/contracts";
-import { requestCertification, fetchCertificationRequests, Certification } from "../../../services/certifications";
+import { fetchMyContracts, updateContractStatus, SeasonalContract } from "../services/contracts";
+import { requestCertification, fetchCertificationRequests, Certification } from "../services/certifications";
 
 interface FarmerDashboardMVPProps {
   userName: string;

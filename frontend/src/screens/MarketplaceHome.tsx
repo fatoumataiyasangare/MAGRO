@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Search, Filter, MapPin, Star, User, MessageCircle, Home as HomeIcon, Bell, Award } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { createAlert } from "../../../services/alerts";
-import { fetchCertificationRequests } from "../../../services/certifications";
+import { createAlert } from "../services/alerts";
+import { fetchCertificationRequests } from "../services/certifications";
 
 interface Product {
   id: string;

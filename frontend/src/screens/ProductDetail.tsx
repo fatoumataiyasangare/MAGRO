@@ -2,8 +2,8 @@ import { ArrowLeft, Star, MapPin, MessageCircle, Award, FileSpreadsheet } from "
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
 import { Product } from "./MarketplaceHomeMVP";
-import { fetchCertificationRequests } from "../../../services/certifications";
-import { createSeasonalContract } from "../../../services/contracts";
+import { fetchCertificationRequests } from "../services/certifications";
+import { createSeasonalContract } from "../services/contracts";
 
 interface ProductDetailMVPProps {
   product: Product;

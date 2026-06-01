@@ -7,9 +7,9 @@ function formatPrice(value: number) {
 }
 
 // Services frontend
-import { fetchVerificationRequests, processVerificationRequest, VerificationRequest } from "../../../services/verifications";
-import { fetchDisputes, resolveDispute, Dispute } from "../../../services/disputes";
-import { fetchCertificationRequests, submitInspectionScore, Certification } from "../../../services/certifications";
+import { fetchVerificationRequests, processVerificationRequest, VerificationRequest } from "../services/verifications";
+import { fetchDisputes, resolveDispute, Dispute } from "../services/disputes";
+import { fetchCertificationRequests, submitInspectionScore, Certification } from "../services/certifications";
 
 interface ProjectorsRegulatorsScreenProps {
   userName: string;
