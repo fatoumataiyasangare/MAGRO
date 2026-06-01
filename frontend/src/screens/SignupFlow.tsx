@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Phone, ArrowRight, ArrowLeft, User, Sprout, ShoppingBag } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import logoMagro from "../assets/MAGRO.png";
@@ -21,6 +21,16 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+
+  // Gérer le compte à rebours
+  React.useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
 
   const handleRoleSelect = (role: "buyer" | "farmer") => {
     setSelectedRole(role);
@@ -48,6 +58,7 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
     try {
       await requestOtp(formattedPhone);
       setStep("otp");
+      setCountdown(60); // 60 secondes
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Impossible d'envoyer le code OTP");
     } finally {
@@ -239,9 +250,29 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
                   </div>
                 </div>
 
+                <div className="flex items-start gap-3 mt-4">
+                  <input
+                    type="checkbox"
+                    id="terms"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="mt-1 w-5 h-5 rounded border-gray-300 text-secondary focus:ring-secondary cursor-pointer"
+                  />
+                  <label htmlFor="terms" className="text-sm text-muted-foreground cursor-pointer">
+                    J'accepte les{" "}
+                    <a href="/terms" target="_blank" className="text-secondary hover:underline">
+                      Conditions d'utilisation
+                    </a>{" "}
+                    et la{" "}
+                    <a href="/privacy" target="_blank" className="text-secondary hover:underline">
+                      Politique de confidentialité
+                    </a>
+                  </label>
+                </div>
+
                 <button
                   onClick={handleInfoContinue}
-                  disabled={!fullName.trim() || phoneNumber.length < 8 || isLoading}
+                  disabled={!fullName.trim() || phoneNumber.length < 8 || !termsAccepted || isLoading}
                   className="w-full bg-secondary hover:bg-secondary/90 active:scale-[0.98] text-white py-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
                 >
                   {isLoading ? "Envoi en cours..." : "Recevoir le code de vérification"}
@@ -305,6 +336,21 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
                 </div>
 
                 {errorMessage && <p className="text-sm text-destructive text-center mb-4">{errorMessage}</p>}
+
+                <div className="text-center mb-6">
+                  {countdown > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Renvoyer le code dans <span className="font-bold text-gray-900">{countdown}s</span>
+                    </p>
+                  ) : (
+                    <button 
+                      onClick={() => { setCountdown(60); requestOtp(phoneNumber); }}
+                      className="text-secondary text-sm font-semibold hover:underline"
+                    >
+                      Renvoyer le code
+                    </button>
+                  )}
+                </div>
 
                 <button onClick={() => setStep("info")} className="text-primary text-sm mx-auto block hover:underline">
                   Modifier le numéro

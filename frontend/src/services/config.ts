@@ -101,24 +101,21 @@ export async function fetchWithFallback<T>(
 ): Promise<T> {
   const cfg = getConfig();
   
-  // Si l'API n'est pas disponible ou si les données mockées sont activées
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
-    console.warn(
-      errorMessage || 
-      "API non disponible ou mode mock activé, utilisation des données de fallback"
-    );
+  if (!cfg.isApiAvailable) {
+    console.warn(errorMessage || "API non disponible, utilisation des données de fallback");
+    return fallbackData;
+  }
+  
+  if (cfg.mockDataEnabled) {
+    console.info("Mode MOCK activé. Utilisation des données de fallback.");
     return fallbackData;
   }
   
   try {
     return await apiCall();
   } catch (error) {
-    console.warn(
-      errorMessage || 
-      "Erreur lors de l'appel API, utilisation des données de fallback",
-      error
-    );
-    return fallbackData;
+    console.error(errorMessage || "Erreur lors de l'appel API réelle", error);
+    throw error;
   }
 }
 

@@ -20,7 +20,6 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
   // Verification form state
   const [showVerificationForm, setShowVerificationForm] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showReviews, setShowReviews] = useState(false);
   const [idDoc, setIdDoc] = useState("");
   const [parcelGps, setParcelGps] = useState("");
   const [bizReg, setBizReg] = useState("");
@@ -38,10 +37,7 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
   };
 
   const handleTogglePremium = () => {
-    const nextVal = !isPremium;
-    setIsPremium(nextVal);
-    localStorage.setItem("magro_premium_status", String(nextVal));
-    alert(nextVal ? "Abonnement Premium activé ! Profitez de la fenêtre exclusive de 2h pour les alertes." : "Abonnement Premium résilié.");
+    onNavigate('subscription');
   };
 
   const handleVerificationSubmit = async (e: React.FormEvent) => {
@@ -137,7 +133,7 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
                     isPremium ? "bg-blue-600 text-white" : "bg-white border border-blue-200 text-blue-700"
                   }`}
                 >
-                  {isPremium ? "Premium Actif" : "S'abonner"}
+                  {isPremium ? "Gérer l'abonnement" : "S'abonner"}
                 </button>
               </div>
 
@@ -322,58 +318,15 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
                         <p className="text-xs text-muted-foreground">Gérer les alertes prix, commandes et messages</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 p-3 bg-white rounded-lg">
+                    <div 
+                      className="flex items-center gap-3 p-3 bg-white rounded-lg cursor-pointer hover:bg-gray-50"
+                      onClick={() => onNavigate('support')}
+                    >
                       <HelpCircle className="w-5 h-5 text-primary" />
                       <div>
-                        <p className="text-sm font-medium">Aide</p>
+                        <p className="text-sm font-medium">Aide et Support</p>
                         <p className="text-xs text-muted-foreground">Centre d'aide et FAQ — Contactez le support</p>
                       </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <button onClick={() => setShowReviews(!showReviews)} className="w-full flex items-center justify-between p-4 bg-muted rounded-xl hover:bg-muted/80 transition-colors cursor-pointer">
-              <div className="flex items-center gap-3">
-                <Star className="w-5 h-5 text-muted-foreground" />
-                <span>Mes avis</span>
-              </div>
-              <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${showReviews ? 'rotate-90' : ''}`} />
-            </button>
-
-            <AnimatePresence>
-              {showReviews && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="bg-muted/50 rounded-xl p-4 space-y-3 mt-1">
-                    <div className="bg-white rounded-lg p-3">
-                      <div className="flex items-center gap-1 mb-1">
-                        {[1,2,3,4,5].map(s => <Star key={s} className={`w-3.5 h-3.5 ${s <= 5 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />)}
-                      </div>
-                      <p className="text-sm font-medium">Tomates excellentes</p>
-                      <p className="text-xs text-muted-foreground">Très frais et bien emballé. Livraison rapide !</p>
-                      <p className="text-xs text-muted-foreground mt-1">— Amadou K. • 12 Avr 2026</p>
-                    </div>
-                    <div className="bg-white rounded-lg p-3">
-                      <div className="flex items-center gap-1 mb-1">
-                        {[1,2,3,4,5].map(s => <Star key={s} className={`w-3.5 h-3.5 ${s <= 4 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />)}
-                      </div>
-                      <p className="text-sm font-medium">Bon rapport qualité-prix</p>
-                      <p className="text-xs text-muted-foreground">Les oignons étaient de bonne taille. Je recommande.</p>
-                      <p className="text-xs text-muted-foreground mt-1">— Fatoumata D. • 8 Avr 2026</p>
-                    </div>
-                    <div className="bg-white rounded-lg p-3">
-                      <div className="flex items-center gap-1 mb-1">
-                        {[1,2,3,4,5].map(s => <Star key={s} className={`w-3.5 h-3.5 ${s <= 3 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />)}
-                      </div>
-                      <p className="text-sm font-medium">Correct mais délai long</p>
-                      <p className="text-xs text-muted-foreground">Produit conforme mais la livraison a pris 3 jours de plus.</p>
-                      <p className="text-xs text-muted-foreground mt-1">— Ibrahim S. • 2 Avr 2026</p>
                     </div>
                   </div>
                 </motion.div>

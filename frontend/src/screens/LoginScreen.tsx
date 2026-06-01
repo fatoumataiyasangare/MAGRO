@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Phone, ArrowRight, ArrowLeft } from "lucide-react";
 import { motion } from "motion/react";
 import logoMagro from "../assets/MAGRO.png";
@@ -17,6 +17,15 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [countdown, setCountdown] = useState(0);
+
+  // Gérer le compte à rebours
+  React.useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
 
   const handlePhoneContinue = async () => {
     setErrorMessage("");
@@ -31,6 +40,7 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
     try {
       await requestOtp(formattedPhone);
       setStep("otp");
+      setCountdown(60);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Impossible d'envoyer le code OTP");
     } finally {
@@ -183,6 +193,21 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
               </div>
 
               {errorMessage && <p className="text-sm text-destructive text-center mb-4">{errorMessage}</p>}
+
+              <div className="text-center mb-6">
+                {countdown > 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Renvoyer le code dans <span className="font-bold text-gray-900">{countdown}s</span>
+                  </p>
+                ) : (
+                  <button 
+                    onClick={() => { setCountdown(60); requestOtp(phoneNumber); }}
+                    className="text-secondary text-sm font-semibold hover:underline"
+                  >
+                    Renvoyer le code
+                  </button>
+                )}
+              </div>
 
               <button onClick={() => setStep("phone")} className="text-primary text-sm mx-auto block hover:underline">
                 Modifier le numéro

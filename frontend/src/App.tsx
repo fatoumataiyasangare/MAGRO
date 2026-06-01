@@ -17,6 +17,8 @@ import ProfileScreen from "./screens/ProfileScreen";
 import OrdersScreen from "./screens/OrdersScreen";
 import TransportNegotiationScreen from "./screens/TransportNegotiationScreen";
 import ProductionPlanningScreen from "./screens/ProductionPlanningScreen";
+import SubscriptionScreen from "./screens/SubscriptionScreen";
+import SupportScreen from "./screens/SupportScreen";
 import OfflineBanner from "./components/OfflineBanner";
 import { ToastProvider, useToast } from "./components/ToastProvider";
 import { Product } from "./screens/MarketplaceHome";
@@ -52,7 +54,9 @@ type Screen =
   | "profile"
   | "transport"
   | "production-planning"
-  | "terms";
+  | "terms"
+  | "subscription"
+  | "support";
 
 function mapListingToProduct(listing: ListingItem): Product {
   return {
@@ -533,6 +537,28 @@ function AppContent() {
             transition={{ duration: 0.3 }}
           >
             <ProductionPlanningScreen onBack={() => setCurrentScreen("farmer-dashboard")} />
+          </motion.div>
+        )}
+        {currentScreen === "subscription" && (
+          <motion.div
+            key="subscription"
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -100 }}
+            transition={{ duration: 0.3 }}
+          >
+            <SubscriptionScreen onBack={handleBackToHome} />
+          </motion.div>
+        )}
+        {currentScreen === "support" && (
+          <motion.div
+            key="support"
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -100 }}
+            transition={{ duration: 0.3 }}
+          >
+            <SupportScreen onBack={handleBackToHome} />
           </motion.div>
         )}
       </AnimatePresence>

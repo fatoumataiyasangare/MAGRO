@@ -53,8 +53,11 @@ export async function requestOtp(phone: string): Promise<{ message: string }> {
       body: JSON.stringify({ phone })
     });
   } catch (err) {
-    console.warn("[Auth] API indisponible pour OTP, fallback mock", err);
-    return { message: "OTP envoyé (mode simulé — backend hors ligne)" };
+    if (cfg.mockDataEnabled) {
+      console.warn("[Auth] API indisponible pour OTP, fallback mock", err);
+      return { message: "OTP envoyé (mode simulé — backend hors ligne)" };
+    }
+    throw err;
   }
 }
 
@@ -87,19 +90,22 @@ export async function verifyOtp(
     setStoredAccessToken(result.accessToken);
     return result;
   } catch (err) {
-    console.warn("[Auth] API indisponible pour verify OTP, fallback mock", err);
-    const storedRole = (localStorage.getItem("magro_user_role")?.toUpperCase() as UserRole | undefined) ?? "BUYER";
-    const role: UserRole = storedRole === "FARMER" ? "FARMER" : "BUYER";
-    const mockProfile: UserProfile = {
-      id: "mock-user-1",
-      phone,
-      name: "Moussa Kouyaté",
-      role,
-      isVerified: false,
-      isPremium: false
-    };
-    setMockSession(mockProfile);
-    return { accessToken: getMockToken(), user: mockProfile };
+    if (cfg.mockDataEnabled) {
+      console.warn("[Auth] API indisponible pour verify OTP, fallback mock", err);
+      const storedRole = (localStorage.getItem("magro_user_role")?.toUpperCase() as UserRole | undefined) ?? "BUYER";
+      const role: UserRole = storedRole === "FARMER" ? "FARMER" : "BUYER";
+      const mockProfile: UserProfile = {
+        id: "mock-user-1",
+        phone,
+        name: "Moussa Kouyaté",
+        role,
+        isVerified: false,
+        isPremium: false
+      };
+      setMockSession(mockProfile);
+      return { accessToken: getMockToken(), user: mockProfile };
+    }
+    throw err;
   }
 }
 
@@ -117,10 +123,12 @@ export async function fetchProfile(): Promise<UserProfile> {
   try {
     return await apiFetch<UserProfile>("/profile");
   } catch (err) {
-    console.warn("[Auth] API indisponible pour profil, fallback mock", err);
-    const session = getMockSession();
-    if (session) return session;
-    throw new Error("No active session");
+    if (cfg.mockDataEnabled) {
+      console.warn("[Auth] API indisponible pour profil, fallback mock", err);
+      const session = getMockSession();
+      if (session) return session;
+    }
+    throw err;
   }
 }
 
