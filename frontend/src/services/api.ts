@@ -1,16 +1,37 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
-const ACCESS_TOKEN_KEY = "magro_access_token";
+
+let inMemoryAccessToken: string | undefined;
 
 export function getStoredAccessToken() {
-  return localStorage.getItem(ACCESS_TOKEN_KEY) ?? undefined;
+  return inMemoryAccessToken;
 }
 
 export function setStoredAccessToken(token: string) {
-  localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  inMemoryAccessToken = token;
 }
 
 export function clearStoredAccessToken() {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  inMemoryAccessToken = undefined;
+}
+
+async function refreshAccessToken() {
+  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" }
+  });
+
+  if (!response.ok) {
+    clearStoredAccessToken();
+    return undefined;
+  }
+
+  const payload = await response.json() as { accessToken?: string };
+  if (payload.accessToken) {
+    setStoredAccessToken(payload.accessToken);
+  }
+
+  return payload.accessToken;
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}, accessToken?: string): Promise<T> {
@@ -22,7 +43,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}, acces
   } as Record<string, string>;
 
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -31,9 +52,16 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}, acces
     headers
   });
 
+  if (response.status === 401 && path !== "/auth/refresh") {
+    const refreshedToken = await refreshAccessToken();
+    if (refreshedToken) {
+      return apiFetch<T>(path, options, refreshedToken);
+    }
+  }
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.error || response.statusText || "Request failed");
+    throw new Error(errorData?.error || "Request failed");
   }
 
   return response.json();

@@ -150,14 +150,27 @@ export default function AppMVP() {
     setCurrentScreen("order");
   };
 
-  const handleOrderConfirm = async () => {
+  const handleOrderConfirm = async (
+    quantity: number,
+    depositRequired: boolean,
+    depositAmount: number,
+    riskScore: number
+  ) => {
     if (!selectedProduct) {
       return;
     }
 
     try {
-      await placeOrder(selectedProduct.id, 10);
-      alert("Commande confirmée !");
+      await placeOrder(selectedProduct.id, quantity, {
+        depositRequired,
+        depositAmount,
+        riskScore,
+        cropName: selectedProduct.name
+      });
+      const paymentMsg = depositRequired
+        ? `Acompte de ${depositAmount.toLocaleString()} FCFA réglé par Mobile Money. La commande est confirmée et en pré-production !`
+        : `Paiement de ${(quantity * selectedProduct.price).toLocaleString()} FCFA séquestré avec succès. Commande confirmée !`;
+      alert(paymentMsg);
       setCurrentScreen(getHomePage());
     } catch (error) {
       alert(error instanceof Error ? error.message : "Impossible de passer la commande");
@@ -422,9 +435,10 @@ export default function AppMVP() {
             exit={{ opacity: 0, x: -100 }}
             transition={{ duration: 0.3 }}
           >
-            <OrdersScreenMVP onBack={handleBackToHome} />
+            <OrdersScreenMVP onBack={handleBackToHome} userRole={userRole} />
           </motion.div>
-        )}      </AnimatePresence>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

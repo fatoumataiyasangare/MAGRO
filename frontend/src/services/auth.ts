@@ -1,5 +1,5 @@
 import { apiFetch, clearStoredAccessToken, setStoredAccessToken } from "./api";
-import { fetchWithFallback, getConfig } from "./config";
+import { getConfig } from "./config";
 
 export type UserRole = "BUYER" | "FARMER" | "REGULATOR";
 
@@ -8,116 +8,156 @@ export interface UserProfile {
   phone: string;
   name: string;
   role: UserRole;
+  isVerified?: boolean;
+  isPremium?: boolean;
 }
 
-/**
- * Demande l'envoi d'un code OTP par SMS
- * Utilise la logique de bascule automatique entre API réelle et mode simulé
- */
-export async function requestOtp(phone: string) {
-  return fetchWithFallback(
-    () => apiFetch<{ message: string }>("/auth/request-otp", {
-      method: "POST",
-      body: JSON.stringify({ phone })
-    }),
-    { message: "OTP envoyé (mode simulé)" },
-    "Erreur lors de la demande d'OTP"
-  );
-}
+const SESSION_KEY = "magro_mock_session";
 
-/**
- * Vérifie un code OTP et connecte l'utilisateur
- * Utilise la logique de bascule automatique entre API réelle et mode simulé
- */
-export async function verifyOtp(phone: string, otp: string) {
-  const cfg = getConfig();
-  
-  // En mode développement avec API non disponible, simuler la vérification
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
-    console.log(`[Mock Auth] Vérification OTP simulée pour ${phone}`);
-    
-    // Créer un utilisateur fictif
-    const mockUser: UserProfile = {
-      id: "mock-user-" + Date.now(),
-      phone: phone,
-      name: "Utilisateur " + phone.slice(-4),
-      role: "BUYER"
-    };
-    
-    const mockToken = "mock-access-token-" + Date.now();
-    setStoredAccessToken(mockToken);
-    
-    return { user: mockUser, accessToken: mockToken };
+function getMockSession(): UserProfile | null {
+  const data = localStorage.getItem(SESSION_KEY);
+  if (!data) {
+    return null;
   }
-  
-  const payload = await apiFetch<{ user: UserProfile; accessToken: string }>("/auth/verify-otp", {
+
+  try {
+    return JSON.parse(data) as UserProfile;
+  } catch {
+    return null;
+  }
+}
+
+function setMockSession(profile: UserProfile) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(profile));
+}
+
+function clearMockSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+function getMockToken() {
+  return `dev.${crypto.randomUUID()}`;
+}
+
+export async function requestOtp(phone: string): Promise<{ message: string }> {
+  const cfg = getConfig();
+
+  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
+    void phone;
+    return { message: "OTP envoye (mode simule)" };
+  }
+
+  return apiFetch<{ message: string }>("/auth/request-otp", {
+    method: "POST",
+    body: JSON.stringify({ phone })
+  });
+}
+
+export async function verifyOtp(
+  phone: string,
+  otp: string
+): Promise<{ accessToken: string; user: UserProfile }> {
+  const cfg = getConfig();
+
+  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
+    const storedRole = (localStorage.getItem("magro_user_role")?.toUpperCase() as UserRole | undefined) ?? "BUYER";
+    const role: UserRole = storedRole === "FARMER" ? "FARMER" : "BUYER";
+    const mockProfile: UserProfile = {
+      id: "mock-user-1",
+      phone,
+      name: "Moussa Kouyate",
+      role,
+      isVerified: localStorage.getItem("magro_verified_status") === "true",
+      isPremium: localStorage.getItem("magro_premium_status") === "true"
+    };
+    setMockSession(mockProfile);
+    return { accessToken: getMockToken(), user: mockProfile };
+  }
+
+  const result = await apiFetch<{ accessToken: string; user: UserProfile }>("/auth/verify-otp", {
     method: "POST",
     body: JSON.stringify({ phone, otp })
   });
 
-  setStoredAccessToken(payload.accessToken);
-  return payload;
+  setStoredAccessToken(result.accessToken);
+  return result;
 }
 
-/**
- * Récupère le profil utilisateur
- * Utilise la logique de bascule automatique entre API réelle et mode simulé
- */
-export async function fetchProfile() {
+export async function fetchProfile(): Promise<UserProfile> {
   const cfg = getConfig();
-  const token = localStorage.getItem("magro_access_token");
-  
-  // En mode développement sans token, retourner un profil fictif
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled || !token) {
-    console.log("[Mock Auth] Profil utilisateur simulé");
-    return {
-      id: "mock-user",
-      phone: "+22370123456",
-      name: "Utilisateur Test",
-      role: "BUYER"
-    };
+
+  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
+    const session = getMockSession();
+    if (session) {
+      return session;
+    }
+    throw new Error("No active session");
   }
-  
+
   return apiFetch<UserProfile>("/profile");
 }
 
-/**
- * Déconnecte l'utilisateur
- * Utilise la logique de bascule automatique entre API réelle et mode simulé
- */
-export async function logout() {
-  clearStoredAccessToken();
-  
-  return fetchWithFallback(
-    () => apiFetch<{ message: string }>("/auth/logout", {
-      method: "POST"
-    }),
-    { message: "Déconnecté (mode simulé)" },
-    "Erreur lors de la déconnexion"
-  );
-}
-
-/**
- * Met à jour le rôle de l'utilisateur
- * Utilise la logique de bascule automatique entre API réelle et mode simulé
- */
-export async function updateRole(role: UserRole) {
+export async function updateRole(role: UserRole): Promise<UserProfile> {
   const cfg = getConfig();
-  const token = localStorage.getItem("magro_access_token");
-  
-  // En mode développement sans token, simuler la mise à jour
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled || !token) {
-    console.log(`[Mock Auth] Mise à jour du rôle simulée: ${role}`);
-    return {
-      id: "mock-user",
-      phone: "+22370123456",
-      name: "Utilisateur Test",
-      role: role
-    };
+  localStorage.setItem("magro_user_role", role.toLowerCase());
+
+  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
+    const session = getMockSession();
+    const updated: UserProfile = session
+      ? { ...session, role }
+      : {
+          id: "mock-user-1",
+          phone: "+22370000001",
+          name: "Moussa Kouyate",
+          role
+        };
+    setMockSession(updated);
+    return updated;
   }
-  
+
+  if (role === "REGULATOR") {
+    throw new Error("Forbidden");
+  }
+
   return apiFetch<UserProfile>("/profile/role", {
     method: "PATCH",
     body: JSON.stringify({ role })
   });
+}
+
+export async function logout(): Promise<void> {
+  const cfg = getConfig();
+
+  clearMockSession();
+  clearStoredAccessToken();
+
+  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
+    return;
+  }
+
+  await apiFetch<void>("/auth/logout", {
+    method: "POST"
+  }).catch(() => undefined);
+}
+
+export async function refreshSession(): Promise<string | null> {
+  const cfg = getConfig();
+
+  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
+    return getMockSession() ? getMockToken() : null;
+  }
+
+  try {
+    const result = await apiFetch<{ accessToken: string }>("/auth/refresh", {
+      method: "POST",
+      credentials: "include"
+    });
+    if (result.accessToken) {
+      setStoredAccessToken(result.accessToken);
+      return result.accessToken;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
