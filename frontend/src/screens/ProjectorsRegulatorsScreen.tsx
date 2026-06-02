@@ -181,11 +181,17 @@ export default function ProjectorsRegulatorsScreen({ userName, onNavigate }: Pro
             <p className="text-2xl font-bold tracking-wide mb-1">MAGRO</p>
             <h1 className="text-lg font-semibold">Bonjour, {userName} 👋</h1>
             
-            {/* Simulation controls for Plafond RBAC */}
+            {/* RBAC Role Selector (Dev Only) */}
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full">
-                Profil : Modérateur 🛡️
-              </span>
+              <select 
+                value={adminRole}
+                onChange={(e) => setAdminRole(e.target.value as any)}
+                className="bg-white/20 text-white text-[10px] px-2 py-1 rounded-full border border-white/30 cursor-pointer appearance-none"
+              >
+                <option value="MODERATOR" className="text-gray-900">🛡️ Modérateur</option>
+                <option value="ANALYST" className="text-gray-900">📊 Analyste</option>
+                <option value="SUPER_ADMIN" className="text-gray-900">👑 Super Admin</option>
+              </select>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -290,9 +296,11 @@ export default function ProjectorsRegulatorsScreen({ userName, onNavigate }: Pro
             {/* Top Navigation Tabs */}
             <div className="flex border-b border-gray-200 overflow-x-auto whitespace-nowrap scrollbar-none pb-1">
               {[
-                { id: "verifications", label: "Badges Verts" },
-                { id: "disputes", label: "Litiges" },
-                { id: "experts", label: "Inspections (Expert)" },
+                ...(adminRole !== "ANALYST" ? [
+                  { id: "verifications", label: "Badges Verts" },
+                  { id: "disputes", label: "Litiges" },
+                  { id: "experts", label: "Inspections (Expert)" },
+                ] : []),
                 { id: "analyst", label: "Statistiques & API" }
               ].map((tab) => (
                 <button

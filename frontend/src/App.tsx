@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import { motion, AnimatePresence } from "motion/react";
 import SplashScreen from "./screens/SplashScreen";
 import WelcomeScreen from "./screens/WelcomeScreen";
@@ -566,10 +567,14 @@ function AppContent() {
   );
 }
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+
 export default function App() {
   return (
-    <ToastProvider>
-      <AppContent />
-    </ToastProvider>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </GoogleOAuthProvider>
   );
 }

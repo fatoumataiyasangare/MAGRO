@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { Phone, ArrowRight, ArrowLeft } from "lucide-react";
 import { motion } from "motion/react";
+import { GoogleLogin } from "@react-oauth/google";
 import logoMagro from "../assets/MAGRO.png";
 import { requestOtp, verifyOtp } from "../services/auth";
-import { signInWithGoogle } from "../services/googleAuthService";
+import { handleGoogleCredential } from "../services/googleAuthService";
 import { validateMalianPhone } from "../services/phoneValidation";
 
 interface LoginScreenProps {
@@ -42,7 +43,7 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
       setStep("otp");
       setCountdown(60);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Impossible d'envoyer le code OTP");
+      setErrorMessage(error instanceof Error ? error.message : "Impossible d'envoyer le code OTP. Vérifiez que le backend est lancé.");
     } finally {
       setIsLoading(false);
     }
@@ -67,6 +68,10 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
         setTimeout(onComplete, 500);
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Code de vérification invalide");
+        // Reset OTP fields on error
+        setOtp(["", "", "", "", "", ""]);
+        const inputs = document.querySelectorAll<HTMLInputElement>(".otp-input");
+        inputs[0]?.focus();
       } finally {
         setIsLoading(false);
       }
@@ -80,16 +85,14 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    setErrorMessage("");
-    try {
-      await signInWithGoogle();
-      setTimeout(onComplete, 500);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Erreur lors de la connexion Google");
-    } finally {
-      setIsLoading(false);
+  const handleGoogleSuccess = (credentialResponse: any) => {
+    if (credentialResponse.credential) {
+      try {
+        handleGoogleCredential(credentialResponse.credential);
+        setTimeout(onComplete, 500);
+      } catch (error) {
+        setErrorMessage("Erreur lors de l'authentification Google.");
+      }
     }
   };
 
@@ -101,7 +104,7 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
           {/* Back button */}
           <button
             onClick={step === "otp" ? () => setStep("phone") : onBack}
-            className="mb-6 p-2 hover:bg-gray-100 rounded-xl transition-colors active:scale-95 inline-flex items-center gap-2 text-sm text-muted-foreground"
+            className="mb-6 p-2 hover:bg-gray-100 rounded-xl transition-colors active:scale-95 inline-flex items-center gap-2 text-sm text-muted-foreground cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Retour
@@ -131,6 +134,7 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     placeholder="+223 XX XX XX XX"
                     className="w-full pl-12 pr-4 py-4 bg-white border-2 border-border rounded-xl focus:outline-none focus:border-primary text-lg"
+                    onKeyDown={(e) => { if (e.key === "Enter" && phoneNumber.length >= 8) handlePhoneContinue(); }}
                   />
                 </div>
               </div>
@@ -138,7 +142,7 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
               <button
                 onClick={handlePhoneContinue}
                 disabled={phoneNumber.length < 8 || isLoading}
-                className="w-full bg-secondary hover:bg-secondary/90 active:scale-[0.98] text-white py-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
+                className="w-full bg-secondary hover:bg-secondary/90 active:scale-[0.98] text-white py-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold cursor-pointer"
               >
                 {isLoading ? "Envoi en cours..." : "Recevoir le code"}
                 {!isLoading && <ArrowRight className="w-5 h-5" />}
@@ -155,25 +159,28 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
                 </div>
               </div>
 
-              <button
-                onClick={handleGoogleSignIn}
-                disabled={isLoading}
-                className="w-full bg-white border-2 border-border hover:bg-muted/50 active:scale-[0.98] py-4 rounded-xl flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                </svg>
-                <span>Continuer avec Google</span>
-              </button>
+              {/* Vrai bouton Google OAuth — affiche le popup de sélection de compte */}
+              <div className="flex justify-center">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setErrorMessage("Échec de la connexion Google. Réessayez.")}
+                  theme="outline"
+                  size="large"
+                  width="350"
+                  text="continue_with"
+                  shape="pill"
+                  locale="fr"
+                />
+              </div>
             </div>
           ) : (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold mb-2">Code de vérification</h2>
                 <p className="text-muted-foreground text-sm">Code envoyé au {phoneNumber}</p>
+                <p className="text-xs text-blue-600 mt-2 bg-blue-50 rounded-lg p-2">
+                  💡 En mode développement, le code OTP est affiché dans la <strong>console du backend</strong> (terminal où tourne le serveur Express).
+                </p>
               </div>
 
               <div className="flex justify-center gap-2 mb-8">
@@ -202,14 +209,14 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
                 ) : (
                   <button 
                     onClick={() => { setCountdown(60); requestOtp(phoneNumber); }}
-                    className="text-secondary text-sm font-semibold hover:underline"
+                    className="text-secondary text-sm font-semibold hover:underline cursor-pointer"
                   >
                     Renvoyer le code
                   </button>
                 )}
               </div>
 
-              <button onClick={() => setStep("phone")} className="text-primary text-sm mx-auto block hover:underline">
+              <button onClick={() => setStep("phone")} className="text-primary text-sm mx-auto block hover:underline cursor-pointer">
                 Modifier le numéro
               </button>
             </motion.div>
