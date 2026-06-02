@@ -1,5 +1,5 @@
 import { useState } from "react";
-import ProjectorsRegulatorsScreen from "./screens/ProjectorsRegulatorsScreen";
+import AdminDashboard from "./screens/AdminDashboard";
 import { ToastProvider, useToast } from "./components/ToastProvider";
 
 function AdminContent() {
@@ -13,7 +13,7 @@ function AdminContent() {
   };
 
   return (
-    <ProjectorsRegulatorsScreen
+    <AdminDashboard
       userName={userName}
       onNavigate={handleNavigate}
     />
