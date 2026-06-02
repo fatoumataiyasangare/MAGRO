@@ -55,6 +55,9 @@ export async function requestOtp(phone: string, isSignup: boolean = false): Prom
   } catch (err) {
     if (cfg.mockDataEnabled || (import.meta.env.MODE === "development" && err instanceof Error && err.message.includes("Failed to fetch"))) {
       console.warn("[Auth] API indisponible pour OTP, fallback mock", err);
+      if (!isSignup && phone !== "+22370000000" && phone !== "+22370000001") {
+        throw new Error("Vous n'avez pas de compte, inscrivez-vous.");
+      }
       return { message: "OTP envoyé (mode simulé — backend hors ligne)" };
     }
     throw err;
@@ -92,12 +95,18 @@ export async function verifyOtp(
   } catch (err) {
     if (cfg.mockDataEnabled || (import.meta.env.MODE === "development" && err instanceof Error && err.message.includes("Failed to fetch"))) {
       console.warn("[Auth] API indisponible pour verify OTP, fallback mock", err);
+      if (phone !== "+22370000000" && phone !== "+22370000001") {
+        // For fallback mock signups or other numbers, allow them but give a generic name
+      }
       const storedRole = (localStorage.getItem("magro_user_role")?.toUpperCase() as UserRole | undefined) ?? "BUYER";
       const role: UserRole = storedRole === "FARMER" ? "FARMER" : "BUYER";
+      const googleName = localStorage.getItem("magro_user_name");
+      const name = googleName || (phone === "+22370000000" ? "Agriculteur Test" : phone === "+22370000001" ? "Acheteur Test" : `Utilisateur ${phone.slice(-4)}`);
+      
       const mockProfile: UserProfile = {
-        id: "mock-user-1",
+        id: `mock-user-${phone.slice(-4)}`,
         phone,
-        name: "Moussa Kouyaté",
+        name,
         role,
         isVerified: false,
         isPremium: false
