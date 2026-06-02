@@ -39,7 +39,7 @@ function getMockToken() {
   return `dev.${crypto.randomUUID()}`;
 }
 
-export async function requestOtp(phone: string): Promise<{ message: string }> {
+export async function requestOtp(phone: string, isSignup: boolean = false): Promise<{ message: string }> {
   const cfg = getConfig();
 
   if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
@@ -50,7 +50,7 @@ export async function requestOtp(phone: string): Promise<{ message: string }> {
   try {
     return await apiFetch<{ message: string }>("/auth/request-otp", {
       method: "POST",
-      body: JSON.stringify({ phone })
+      body: JSON.stringify({ phone, isSignup })
     });
   } catch (err) {
     if (cfg.mockDataEnabled || (import.meta.env.MODE === "development" && err instanceof Error && err.message.includes("Failed to fetch"))) {

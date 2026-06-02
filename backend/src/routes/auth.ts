@@ -15,7 +15,7 @@ import { sendSMS } from "../lib/sms.js";
 
 const router = Router();
 
-const requestOtpSchema = z.object({ phone: phoneSchema });
+const requestOtpSchema = z.object({ phone: phoneSchema, isSignup: z.boolean().optional() });
 const verifyOtpSchema = z.object({ phone: phoneSchema, otp: z.string().regex(/^\d{6}$/) });
 
 function publicUser(user: { id: string; phone: string; name: string; role: string }) {
@@ -33,7 +33,19 @@ router.post("/request-otp", async (req, res) => {
     return res.status(400).json({ error: "Invalid payload" });
   }
 
-  const { phone } = parseResult.data;
+  const { phone, isSignup } = parseResult.data;
+
+  const existingUser = await prisma.user.findUnique({ where: { phone } });
+
+  if (isSignup) {
+    if (existingUser) {
+      return res.status(400).json({ error: "Un compte existe déjà avec ce numéro. Veuillez vous connecter." });
+    }
+  } else {
+    if (!existingUser) {
+      return res.status(404).json({ error: "Vous n'avez pas de compte, inscrivez-vous." });
+    }
+  }
 
   await prisma.loginOtp.deleteMany({
     where: {

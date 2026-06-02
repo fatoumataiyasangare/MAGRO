@@ -57,7 +57,7 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
     setIsLoading(true);
 
     try {
-      await requestOtp(formattedPhone);
+      await requestOtp(formattedPhone, true);
       setStep("otp");
       setCountdown(60); // 60 secondes
     } catch (error) {
@@ -316,9 +316,6 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
                 <div className="text-center mb-8">
                   <h2 className="text-2xl font-bold mb-2">Code de vérification</h2>
                   <p className="text-muted-foreground text-sm">Code envoyé au {phoneNumber}</p>
-                  <p className="text-xs text-blue-600 mt-2 bg-blue-50 rounded-lg p-2">
-                    💡 En mode développement, le code OTP est affiché dans la <strong>console du backend</strong>.
-                  </p>
                 </div>
 
                 <div className="flex justify-center gap-2 mb-8">
