@@ -339,6 +339,7 @@ function AppContent() {
             <LoginScreen
               onComplete={handleLoginComplete}
               onBack={() => setCurrentScreen("welcome")}
+              onNavigateToSignup={() => setCurrentScreen("signup")}
             />
           </motion.div>
         )}

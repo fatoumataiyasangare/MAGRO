@@ -10,9 +10,10 @@ import { validateMalianPhone } from "../services/phoneValidation";
 interface LoginScreenProps {
   onComplete: () => void;
   onBack: () => void;
+  onNavigateToSignup?: () => void;
 }
 
-export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
+export default function LoginScreen({ onComplete, onBack, onNavigateToSignup }: LoginScreenProps) {
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -148,7 +149,19 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
                 {!isLoading && <ArrowRight className="w-5 h-5" />}
               </button>
 
-              {errorMessage && <p className="text-sm text-destructive text-center">{errorMessage}</p>}
+              {errorMessage && (
+                <div className="text-center">
+                  <p className="text-sm text-destructive">{errorMessage}</p>
+                  {errorMessage.includes("inscrivez-vous") && onNavigateToSignup && (
+                    <button 
+                      onClick={onNavigateToSignup}
+                      className="mt-2 text-sm text-primary font-semibold underline cursor-pointer"
+                    >
+                      Aller à la page d'inscription
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -178,9 +191,6 @@ export default function LoginScreen({ onComplete, onBack }: LoginScreenProps) {
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold mb-2">Code de vérification</h2>
                 <p className="text-muted-foreground text-sm">Code envoyé au {phoneNumber}</p>
-                <p className="text-xs text-blue-600 mt-2 bg-blue-50 rounded-lg p-2">
-                  💡 En mode développement, le code OTP est affiché dans la <strong>console du backend</strong> (terminal où tourne le serveur Express).
-                </p>
               </div>
 
               <div className="flex justify-center gap-2 mb-8">
