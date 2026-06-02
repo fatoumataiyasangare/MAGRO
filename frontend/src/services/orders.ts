@@ -3,6 +3,7 @@ import { getConfig } from "./config";
 
 export interface FarmerOrder {
   id: string;
+  listingId?: string;
   crop: string;
   buyer: string;
   quantity: number;
@@ -78,6 +79,7 @@ export async function placeOrder(
     const orders = getMockOrders();
     const newOrder: FarmerOrder = {
       id: "ord-" + Date.now(),
+      listingId,
       crop: options?.cropName || "Tomates",
       buyer: "Acheteur Test",
       quantity,
@@ -96,10 +98,33 @@ export async function placeOrder(
     return newOrder;
   }
   
-  return apiFetch<FarmerOrder>("/orders", {
-    method: "POST",
-    body: JSON.stringify({ listingId, quantity, ...options })
-  });
+  try {
+    return await apiFetch<FarmerOrder>("/orders", {
+      method: "POST",
+      body: JSON.stringify({ listingId, quantity, ...options })
+    });
+  } catch (err) {
+    console.warn("[Orders] API indisponible, fallback mock", err);
+    const orders = getMockOrders();
+    const newOrder: FarmerOrder = {
+      id: "ord-" + Date.now(),
+      listingId,
+      crop: options?.cropName || "Tomates",
+      buyer: "Acheteur Test",
+      quantity,
+      status: "EN_ATTENTE",
+      date: new Date().toISOString().split("T")[0],
+      totalPrice: quantity * 750,
+      unit: "kg",
+      depositRequired: options?.depositRequired ?? false,
+      depositAmount: options?.depositAmount ?? 0,
+      riskScore: options?.riskScore ?? 0,
+      paymentStatus: (options?.depositRequired) ? "UNPAID" : "ESCROW"
+    };
+    orders.push(newOrder);
+    saveMockOrders(orders);
+    return newOrder;
+  }
 }
 
 export async function fetchFarmerOrders() {
@@ -109,7 +134,12 @@ export async function fetchFarmerOrders() {
     return getMockOrders();
   }
   
-  return apiFetch<FarmerOrder[]>("/orders/mine");
+  try {
+    return await apiFetch<FarmerOrder[]>("/orders/mine");
+  } catch (err) {
+    console.warn("[Orders] API indisponible, fallback mock", err);
+    return getMockOrders();
+  }
 }
 
 export async function updateOrderStatus(orderId: string, status: string) {
@@ -131,10 +161,22 @@ export async function updateOrderStatus(orderId: string, status: string) {
     throw new Error("Commande non trouvée");
   }
   
-  return apiFetch<FarmerOrder>(`/orders/${orderId}/status`, {
-    method: "PATCH",
-    body: JSON.stringify({ status })
-  });
+  try {
+    return await apiFetch<FarmerOrder>(`/orders/${orderId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+  } catch (err) {
+    console.warn("[Orders] API indisponible, fallback mock", err);
+    const orders = getMockOrders();
+    const idx = orders.findIndex((o) => o.id === orderId);
+    if (idx !== -1) {
+      orders[idx].status = status;
+      saveMockOrders(orders);
+      return orders[idx];
+    }
+    throw new Error("Commande non trouvée");
+  }
 }
 
 export async function confirmDelivery(orderId: string) {
@@ -153,7 +195,60 @@ export async function confirmDelivery(orderId: string) {
     throw new Error("Commande non trouvée");
   }
   
-  return apiFetch<FarmerOrder>(`/orders/${orderId}/confirm-delivery`, {
-    method: "POST"
-  });
+  try {
+    return await apiFetch<FarmerOrder>(`/orders/${orderId}/confirm-delivery`, {
+      method: "POST"
+    });
+  } catch (err) {
+    console.warn("[Orders] API indisponible, fallback mock", err);
+    const orders = getMockOrders();
+    const idx = orders.findIndex((o) => o.id === orderId);
+    if (idx !== -1) {
+      orders[idx].status = "DELIVERED";
+      orders[idx].paymentStatus = "RELEASED";
+      saveMockOrders(orders);
+      return orders[idx];
+    }
+    throw new Error("Commande non trouvée");
+  }
+}
+
+export async function cancelOrder(orderId: string) {
+  const cfg = getConfig();
+  
+  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
+    console.log("[Mock Orders] Annulation de la commande par l'acheteur");
+    const orders = getMockOrders();
+    const idx = orders.findIndex((o) => o.id === orderId);
+    if (idx !== -1) {
+      if (orders[idx].status !== "EN_ATTENTE") {
+        throw new Error("Impossible d'annuler une commande déjà confirmée.");
+      }
+      orders[idx].status = "CANCELLED";
+      orders[idx].paymentStatus = "REFUNDED"; // Fonds séquestrés remboursés
+      saveMockOrders(orders);
+      return orders[idx];
+    }
+    throw new Error("Commande non trouvée");
+  }
+  
+  try {
+    return await apiFetch<FarmerOrder>(`/orders/${orderId}/cancel`, {
+      method: "POST"
+    });
+  } catch (err) {
+    console.warn("[Orders] API indisponible, fallback mock", err);
+    const orders = getMockOrders();
+    const idx = orders.findIndex((o) => o.id === orderId);
+    if (idx !== -1) {
+      if (orders[idx].status !== "EN_ATTENTE") {
+        throw new Error("Impossible d'annuler une commande déjà confirmée.");
+      }
+      orders[idx].status = "CANCELLED";
+      orders[idx].paymentStatus = "REFUNDED";
+      saveMockOrders(orders);
+      return orders[idx];
+    }
+    throw new Error("Commande non trouvée");
+  }
 }

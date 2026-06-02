@@ -1,8 +1,10 @@
-import { Plus, Package, Bell, Home as HomeIcon, MessageCircle, User, List, Award, FileSpreadsheet, Check, X } from "lucide-react";
+import { Plus, Package, Bell, Home as HomeIcon, MessageCircle, User, List, Award, FileSpreadsheet, Check, X, BarChart3, Sprout } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
 import { fetchMyContracts, updateContractStatus, SeasonalContract } from "../services/contracts";
 import { requestCertification, fetchCertificationRequests, Certification } from "../services/certifications";
+import { useToast } from "../components/ToastProvider";
+import MarketInsights from "../components/MarketInsights";
 
 interface FarmerDashboardMVPProps {
   userName: string;
@@ -11,11 +13,15 @@ interface FarmerDashboardMVPProps {
 }
 
 export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts = 0 }: FarmerDashboardMVPProps) {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState("home");
+  const [dashTab, setDashTab] = useState<"home" | "market">("home");
   const [contracts, setContracts] = useState<SeasonalContract[]>([]);
   const [certifications, setCertifications] = useState<Certification[]>([]);
   const [showCertDialog, setShowCertDialog] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [certCrop, setCertCrop] = useState("Tomates fraîches");
+  const [unreadNotifications, setUnreadNotifications] = useState(2);
 
   const stats = [
     { label: "Annonces", value: totalProducts.toString(), color: "text-blue-600" },
@@ -41,31 +47,31 @@ export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts
   const handleAcceptContract = async (id: string) => {
     try {
       await updateContractStatus(id, "ACTIVE");
-      alert("Contrat saisonnier accepté et actif !");
+      showToast("Contrat saisonnier accepté et actif !", "success");
       loadDashboardData();
     } catch (err) {
-      alert("Erreur lors de l'acceptation.");
+      showToast("Erreur lors de l'acceptation.", "error");
     }
   };
 
   const handleRejectContract = async (id: string) => {
     try {
       await updateContractStatus(id, "CANCELLED");
-      alert("Contrat saisonnier refusé.");
+      showToast("Contrat saisonnier refusé.", "info");
       loadDashboardData();
     } catch (err) {
-      alert("Erreur.");
+      showToast("Erreur.", "error");
     }
   };
 
   const handleRequestCert = async () => {
     try {
       await requestCertification(certCrop);
-      alert(`Demande de certification pour ${certCrop} soumise. Frais de 15 000 FCFA réglés par Mobile Money.`);
+      showToast(`Demande pour ${certCrop} soumise. Frais réglés.`, "success");
       setShowCertDialog(false);
       loadDashboardData();
     } catch (err) {
-      alert("Erreur.");
+      showToast("Erreur.", "error");
     }
   };
 
@@ -83,11 +89,13 @@ export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts
               <p className="text-white/80 text-sm">Agriculteur Pro</p>
             </div>
           </div>
-          <button className="relative p-2 bg-white/10 rounded-lg">
+          <button onClick={() => { setShowNotifications(true); setUnreadNotifications(0); }} className="relative p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors cursor-pointer">
             <Bell className="w-6 h-6" />
-            <span className="absolute top-0 right-0 w-4.5 h-4.5 bg-secondary text-[10px] rounded-full flex items-center justify-center font-bold">
-              2
-            </span>
+            {unreadNotifications > 0 && (
+              <span className="absolute top-0 right-0 w-4.5 h-4.5 bg-secondary text-[10px] rounded-full flex items-center justify-center font-bold">
+                {unreadNotifications}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -95,7 +103,7 @@ export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 -mt-6 mb-6">
+        <div className="grid grid-cols-3 gap-3 mb-6 mt-4">
           {stats.map((stat, index) => (
             <motion.div
               key={stat.label}
@@ -110,11 +118,59 @@ export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts
           ))}
         </div>
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        {/* Tab switcher: Home / Market Insights */}
+        <div className="flex gap-2 mb-5">
+          <button
+            onClick={() => setDashTab("home")}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-colors cursor-pointer ${
+              dashTab === "home" ? "bg-primary text-white" : "bg-white text-muted-foreground border border-border"
+            }`}
+          >
+            🏠 Tableau de bord
+          </button>
+          <button
+            onClick={() => setDashTab("market")}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-colors cursor-pointer ${
+              dashTab === "market" ? "bg-secondary text-white" : "bg-white text-muted-foreground border border-border"
+            }`}
+          >
+            📈 Marché & Tendances
+          </button>
+        </div>
+
+        {dashTab === "market" ? (
+          <MarketInsights />
+        ) : (<>
+        
+        {/* Analytics Mini-Dashboard */}
+        <div className="bg-white rounded-2xl p-4 mb-6 shadow-sm border border-border">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+              <BarChart3 className="w-4 h-4 text-primary" />
+              Ventes de la semaine
+            </h2>
+            <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-lg">+12%</span>
+          </div>
+          <div className="flex items-end justify-between h-24 gap-2 mb-2">
+            {[40, 70, 45, 90, 65, 80, 100].map((height, i) => (
+              <div key={i} className="flex-1 flex flex-col justify-end items-center gap-1 group">
+                <div 
+                  className="w-full bg-secondary/20 rounded-t-sm group-hover:bg-secondary transition-colors"
+                  style={{ height: `${height}%` }}
+                ></div>
+                <span className="text-[10px] text-muted-foreground">
+                  {["L", "M", "M", "J", "V", "S", "D"][i]}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground text-center font-medium">Revenus estimés : <span className="text-gray-900">450 000 FCFA</span></p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-6">
           <motion.button
             onClick={() => onNavigate("create-listing")}
-            className="bg-secondary hover:bg-secondary/90 text-white py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors text-sm font-semibold"
+            className="bg-secondary hover:bg-secondary/90 text-white py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors text-xs font-semibold"
             whileTap={{ scale: 0.98 }}
           >
             <Plus className="w-4 h-4" />
@@ -122,11 +178,27 @@ export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts
           </motion.button>
           <motion.button
             onClick={() => onNavigate("my-listings")}
-            className="bg-white border border-border hover:bg-muted text-foreground py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors text-sm font-semibold"
+            className="bg-white border border-border hover:bg-muted text-foreground py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors text-xs font-semibold"
             whileTap={{ scale: 0.98 }}
           >
             <List className="w-4 h-4" />
             <span>Mes annonces</span>
+          </motion.button>
+          <motion.button
+            onClick={() => onNavigate("orders")}
+            className="bg-white border border-border hover:bg-muted text-foreground py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors text-xs font-semibold"
+            whileTap={{ scale: 0.98 }}
+          >
+            <Package className="w-4 h-4" />
+            <span>Commandes</span>
+          </motion.button>
+          <motion.button
+            onClick={() => onNavigate("production-planning")}
+            className="bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-700 hover:to-emerald-600 text-white py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors text-xs font-semibold"
+            whileTap={{ scale: 0.98 }}
+          >
+            <Sprout className="w-4 h-4" />
+            <span>Planification</span>
           </motion.button>
         </div>
 
@@ -231,7 +303,52 @@ export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts
             )}
           </div>
         </div>
+        </>)}
       </div>
+
+      {/* Notifications Dialog */}
+      <AnimatePresence>
+        {showNotifications && (
+          <motion.div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-xl"
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+            >
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Bell className="w-5 h-5 text-primary" />
+                Vos Notifications
+              </h3>
+              
+              <div className="space-y-3 pt-2">
+                <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                  <p className="text-sm font-semibold text-blue-900">Nouvelle commande !</p>
+                  <p className="text-xs text-blue-700 mt-1">L'acheteur Fatoumata K. a commandé 50kg de tomates.</p>
+                </div>
+                <div className="bg-green-50 p-3 rounded-xl border border-green-100">
+                  <p className="text-sm font-semibold text-green-900">Fonds libérés</p>
+                  <p className="text-xs text-green-700 mt-1">Le paiement pour la commande #234 a été viré sur votre portefeuille.</p>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowNotifications(false)}
+                  className="w-full bg-gray-100 text-gray-700 text-xs py-3 rounded-xl font-bold hover:bg-gray-200 cursor-pointer"
+                >
+                  Fermer
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Request Certification Dialog Modal (Simulated Payment) */}
       <AnimatePresence>

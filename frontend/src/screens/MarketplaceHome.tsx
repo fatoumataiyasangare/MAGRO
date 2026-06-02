@@ -28,6 +28,7 @@ export default function MarketplaceHomeMVP({ products: externalProducts, onProdu
   const [showAlertDialog, setShowAlertDialog] = useState(false);
   const [alertCrop, setAlertCrop] = useState("Mangues Kent");
   const [alertRegion, setAlertRegion] = useState("Koulikoro");
+  const [activeCategory, setActiveCategory] = useState("Tous");
   
   // List of actual quality badges from certifications database
   const [certs, setCerts] = useState<any[]>([]);
@@ -106,10 +107,29 @@ export default function MarketplaceHomeMVP({ products: externalProducts, onProdu
     }
   ];
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.region.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const categories = [
+    { label: "Tous", emoji: "🛒" },
+    { label: "Légumes", emoji: "🍅", keywords: ["tomate", "oignon", "aubergine", "chou", "carotte", "laitue", "piment", "gombo"] },
+    { label: "Fruits", emoji: "🥭", keywords: ["mangue", "banane", "orange", "papaye", "pastèque", "citron", "ananas"] },
+    { label: "Céréales", emoji: "🌾", keywords: ["riz", "mil", "sorgho", "maïs", "blé", "fonio"] },
+    { label: "Légumineuses", emoji: "🫘", keywords: ["arachide", "niébé", "haricot", "soja", "pois"] },
+  ];
+
+  const filteredProducts = products.filter(p => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.region.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (activeCategory === "Tous") return matchesSearch;
+    
+    const cat = categories.find(c => c.label === activeCategory);
+    if (!cat || !cat.keywords) return matchesSearch;
+    
+    const matchesCategory = cat.keywords.some(kw =>
+      p.name.toLowerCase().includes(kw)
+    );
+    return matchesSearch && matchesCategory;
+  });
 
   return (
     <div className="h-screen bg-muted flex flex-col">
@@ -143,16 +163,58 @@ export default function MarketplaceHomeMVP({ products: externalProducts, onProdu
         </div>
       </div>
 
-      {/* Products List */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 pb-24">
+      {/* Category Pills */}
+      <div className="bg-white px-6 py-3 border-b border-border">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          {categories.map((cat) => (
+            <button
+              key={cat.label}
+              onClick={() => setActiveCategory(cat.label)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${
+                activeCategory === cat.label
+                  ? "bg-secondary text-white shadow-sm"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              <span>{cat.emoji}</span>
+              <span>{cat.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto px-6 pt-4 pb-24">
         <div className="space-y-4">
-          {filteredProducts.map((product, index) => {
+          {filteredProducts.length === 0 && searchQuery === "" ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <motion.div
+                key={`skeleton-${i}`}
+                className="bg-white rounded-2xl overflow-hidden shadow-sm border border-border"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <div className="w-full h-48 bg-gray-200 animate-pulse" />
+                <div className="p-4 space-y-3">
+                  <div className="h-5 bg-gray-200 animate-pulse rounded-md w-1/2" />
+                  <div className="h-3 bg-gray-200 animate-pulse rounded-md w-1/3" />
+                  <div className="h-3 bg-gray-200 animate-pulse rounded-md w-1/4" />
+                  <div className="flex justify-between pt-2">
+                    <div className="h-6 bg-gray-200 animate-pulse rounded-md w-1/4" />
+                    <div className="h-4 bg-gray-200 animate-pulse rounded-md w-1/5" />
+                  </div>
+                </div>
+              </motion.div>
+            ))
+          ) : (
+            filteredProducts.map((product, index) => {
             const badge = getBadgeForProduct(product);
             return (
               <motion.div
                 key={product.id}
                 onClick={() => onProductClick(product)}
-                className="bg-white rounded-2xl overflow-hidden active:scale-[0.98] transition-transform cursor-pointer shadow-sm border border-border"
+                className="bg-white rounded-2xl overflow-hidden active:scale-[0.98] hover:scale-[1.02] hover:shadow-md transition-all duration-300 cursor-pointer shadow-sm border border-border"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
@@ -200,7 +262,7 @@ export default function MarketplaceHomeMVP({ products: externalProducts, onProdu
                 </div>
               </motion.div>
             );
-          })}
+          }))}
         </div>
       </div>
 
@@ -285,6 +347,18 @@ export default function MarketplaceHomeMVP({ products: externalProducts, onProdu
           >
             <HomeIcon className="w-6 h-6" />
             <span className="text-xs">Accueil</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("orders");
+              onNavigate("orders");
+            }}
+            className={`flex flex-col items-center gap-1 ${
+              activeTab === "orders" ? "text-secondary" : "text-muted-foreground"
+            }`}
+          >
+            <Award className="w-6 h-6" />
+            <span className="text-xs">Commandes</span>
           </button>
           <button
             onClick={() => {

@@ -190,6 +190,7 @@ model Order {
   updatedAt         DateTime          @updatedAt
   
   disputes          Dispute[]
+  transportNegotiations TransportNegotiation[]
 }
 
 model Dispute {
@@ -301,4 +302,18 @@ model InstitutionalApiKey {
   createdBy   String
   lastUsedAt  DateTime?
   createdAt   DateTime @default(now())
+}
+
+model TransportNegotiation {
+  id             String   @id @default(uuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id])
+  buyerId        String
+  transporterName String
+  transporterPhone String
+  proposedPrice  Int
+  status         String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }

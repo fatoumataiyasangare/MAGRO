@@ -66,6 +66,13 @@ export default function LoginSignupMVP({ onComplete }: LoginSignupMVPProps) {
     }
   };
 
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      const inputs = document.querySelectorAll<HTMLInputElement>(".otp-input");
+      inputs[index - 1]?.focus();
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setErrorMessage("");
@@ -80,9 +87,9 @@ export default function LoginSignupMVP({ onComplete }: LoginSignupMVPProps) {
   };
 
   return (
-    <div className="h-screen bg-white flex flex-col">
-      <div className="flex-1 flex flex-col justify-center px-6 max-w-md mx-auto w-full">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+    <div className="h-screen bg-white flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto flex flex-col justify-center px-6 py-8 max-w-md mx-auto w-full">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="my-auto">
           <img
             src={logoMagro}
             alt="MAGRO"
@@ -152,16 +159,18 @@ export default function LoginSignupMVP({ onComplete }: LoginSignupMVPProps) {
                 <p className="text-muted-foreground">Code envoyé au {phoneNumber}</p>
               </div>
 
-              <div className="flex gap-2 justify-center mb-8">
+              <div className="flex justify-center gap-2 mb-8">
                 {otp.map((digit, index) => (
                   <input
                     key={index}
                     type="text"
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     maxLength={1}
                     value={digit}
                     onChange={(e) => handleOtpChange(index, e.target.value)}
-                    className="otp-input w-12 h-14 text-center text-2xl bg-white border-2 border-border rounded-xl focus:outline-none focus:border-primary"
+                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                    className="otp-input w-12 h-14 text-center text-2xl font-bold bg-white border-2 border-border rounded-xl focus:outline-none focus:border-primary"
                   />
                 ))}
               </div>
