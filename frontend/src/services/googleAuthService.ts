@@ -15,6 +15,7 @@
  * pour validation côté serveur via l'API Google.
  */
 
+import { jwtDecode } from "jwt-decode";
 import type { UserProfile } from "./auth";
 
 // Le credential Google est un JWT contenant ces champs
@@ -31,12 +32,12 @@ interface GoogleCredentialPayload {
  * En production, la vérification se fait côté backend.
  */
 function decodeGoogleCredential(credential: string): GoogleCredentialPayload {
-  const parts = credential.split(".");
-  if (parts.length !== 3) {
-    throw new Error("Invalid Google credential format");
+  try {
+    return jwtDecode<GoogleCredentialPayload>(credential);
+  } catch (error) {
+    console.error("JWT decoding failed:", error);
+    throw new Error("Failed to decode JWT");
   }
-  const payload = JSON.parse(atob(parts[1]));
-  return payload as GoogleCredentialPayload;
 }
 
 /**

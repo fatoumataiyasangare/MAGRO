@@ -3,6 +3,8 @@ import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { requireAuth, requireRole, AuthRequest } from "../middleware/auth.js";
 import { uuidSchema } from "../lib/security.js";
+import crypto from "crypto";
+import bcrypt from "bcrypt";
 
 const router = Router();
 
@@ -165,6 +167,85 @@ router.get("/stats", requireAuth, requireRole("ANALYST", "MODERATOR", "SUPER_ADM
     ordersByStatus: ordersCount,
     usersByRole: usersCount
   });
+});
+
+// GET /admin/api-keys
+router.get("/api-keys", requireAuth, requireRole("SUPER_ADMIN"), async (_req: AuthRequest, res) => {
+  const keys = await prisma.institutionalApiKey.findMany({
+    orderBy: { createdAt: "desc" }
+  });
+  // Ne pas renvoyer le hash !
+  res.json(keys.map(k => ({
+    id: k.id,
+    partnerName: k.partnerName,
+    quotaPerDay: k.quotaPerDay,
+    isActive: k.isActive,
+    createdAt: k.createdAt
+  })));
+});
+
+// POST /admin/api-keys
+router.post("/api-keys", requireAuth, requireRole("SUPER_ADMIN"), async (req: AuthRequest, res) => {
+  const schema = z.object({
+    partnerName: z.string().min(2),
+    quotaPerDay: z.number().int().min(10)
+  });
+  
+  const parseResult = schema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res.status(400).json({ error: "Invalid payload" });
+  }
+  
+  const rawKey = crypto.randomBytes(24).toString("hex");
+  const apiKeyHash = await bcrypt.hash(rawKey, 10);
+  
+  const newKey = await prisma.institutionalApiKey.create({
+    data: {
+      partnerName: parseResult.data.partnerName,
+      quotaPerDay: parseResult.data.quotaPerDay,
+      apiKeyHash,
+      createdBy: req.user!.id
+    }
+  });
+  
+  res.json({
+    id: newKey.id,
+    partnerName: newKey.partnerName,
+    apiKey: rawKey // La clé brute n'est retournée qu'une seule fois !
+  });
+});
+
+// DELETE /admin/api-keys/:id
+router.delete("/api-keys/:id", requireAuth, requireRole("SUPER_ADMIN"), async (req: AuthRequest, res) => {
+  const params = z.object({ id: uuidSchema }).safeParse(req.params);
+  if (!params.success) return res.status(400).json({ error: "Invalid ID" });
+  
+  await prisma.institutionalApiKey.delete({
+    where: { id: params.data.id }
+  });
+  
+  res.json({ success: true });
+});
+
+// GET /admin/export
+router.get("/export", requireAuth, requireRole("ANALYST", "SUPER_ADMIN", "MODERATOR"), async (_req: AuthRequest, res) => {
+  const data = await prisma.listing.findMany({
+    select: {
+      title: true,
+      price: true,
+      region: true,
+      createdAt: true
+    }
+  });
+  
+  // Basic anonymized export logic per CDC v3
+  const exportData = {
+    generatedAt: new Date(),
+    recordsCount: data.length,
+    data: data
+  };
+  
+  res.json(exportData);
 });
 
 export default router;

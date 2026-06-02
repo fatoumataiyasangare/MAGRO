@@ -12,7 +12,7 @@ import OrderScreen from "./screens/OrderScreen";
 import FarmerDashboard from "./screens/FarmerDashboard";
 import CreateProductScreen from "./screens/CreateProductScreen";
 import MyListingsScreen from "./screens/MyListingsScreen";
-import ProjectorsRegulatorsScreen from "./screens/ProjectorsRegulatorsScreen";
+import AdminDashboard from "./screens/AdminDashboard";
 import ChatScreen from "./screens/ChatScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import OrdersScreen from "./screens/OrdersScreen";
@@ -468,7 +468,20 @@ function AppContent() {
           </motion.div>
         )}
 
-        {/* Regulator dashboard removed from public app */}
+        {currentScreen === "regulator-dashboard" && (
+          <motion.div
+            key="regulator-dashboard"
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -100 }}
+            transition={{ duration: 0.3 }}
+          >
+            <AdminDashboard
+              userName={userName}
+              onNavigate={handleNavigate}
+            />
+          </motion.div>
+        )}
 
         {currentScreen === "chat" && (
           <motion.div

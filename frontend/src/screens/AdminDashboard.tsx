@@ -11,12 +11,12 @@ import { fetchVerificationRequests, processVerificationRequest, VerificationRequ
 import { fetchDisputes, resolveDispute, Dispute } from "../services/disputes";
 import { fetchCertificationRequests, submitInspectionScore, Certification } from "../services/certifications";
 
-interface ProjectorsRegulatorsScreenProps {
+interface AdminDashboardProps {
   userName: string;
   onNavigate: (screen: string) => void;
 }
 
-export default function ProjectorsRegulatorsScreen({ userName, onNavigate }: ProjectorsRegulatorsScreenProps) {
+export default function AdminDashboard({ userName, onNavigate }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState("home"); // home or monitor
   const [subTab, setSubTab] = useState("verifications"); // verifications, disputes, experts, analyst
 

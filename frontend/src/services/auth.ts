@@ -53,7 +53,7 @@ export async function requestOtp(phone: string): Promise<{ message: string }> {
       body: JSON.stringify({ phone })
     });
   } catch (err) {
-    if (cfg.mockDataEnabled) {
+    if (cfg.mockDataEnabled || (import.meta.env.MODE === "development" && err instanceof Error && err.message.includes("Failed to fetch"))) {
       console.warn("[Auth] API indisponible pour OTP, fallback mock", err);
       return { message: "OTP envoyé (mode simulé — backend hors ligne)" };
     }
@@ -90,7 +90,7 @@ export async function verifyOtp(
     setStoredAccessToken(result.accessToken);
     return result;
   } catch (err) {
-    if (cfg.mockDataEnabled) {
+    if (cfg.mockDataEnabled || (import.meta.env.MODE === "development" && err instanceof Error && err.message.includes("Failed to fetch"))) {
       console.warn("[Auth] API indisponible pour verify OTP, fallback mock", err);
       const storedRole = (localStorage.getItem("magro_user_role")?.toUpperCase() as UserRole | undefined) ?? "BUYER";
       const role: UserRole = storedRole === "FARMER" ? "FARMER" : "BUYER";
@@ -123,7 +123,7 @@ export async function fetchProfile(): Promise<UserProfile> {
   try {
     return await apiFetch<UserProfile>("/profile");
   } catch (err) {
-    if (cfg.mockDataEnabled) {
+    if (cfg.mockDataEnabled || (import.meta.env.MODE === "development" && err instanceof Error && err.message.includes("Failed to fetch"))) {
       console.warn("[Auth] API indisponible pour profil, fallback mock", err);
       const session = getMockSession();
       if (session) return session;
