@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import { requireAuth, requireRole, AuthRequest } from "../middleware/auth.js";
 import { uuidSchema } from "../lib/security.js";
+import { asyncHandler } from "../middleware/asyncHandler.js";
 
 const router = Router();
 
@@ -17,7 +18,8 @@ const createContractSchema = z.object({
   deliverySchedule: z.record(z.unknown())
 });
 
-router.post("/", requireAuth, requireRole("BUYER"), async (req: AuthRequest, res) => {
+// POST /contracts - Create a seasonal contract (BUYER/INDUSTRY only)
+router.post("/", requireAuth, requireRole("BUYER"), asyncHandler(async (req: AuthRequest, res) => {
   const parseResult = createContractSchema.safeParse(req.body);
   if (!parseResult.success) {
     return res.status(400).json({ error: "Payload invalid" });
@@ -25,7 +27,6 @@ router.post("/", requireAuth, requireRole("BUYER"), async (req: AuthRequest, res
 
   const { farmerId, cropName, totalQuantityKg, pricePerKg, seasonStart, seasonEnd, deliverySchedule } = parseResult.data;
 
-  // S'assurer que l'acheteur est de type INDUSTRIE
   const buyer = await prisma.user.findUnique({ where: { id: req.user!.id } });
   if (!buyer || buyer.buyerType !== "INDUSTRY") {
     return res.status(403).json({ error: "Forbidden" });
@@ -46,9 +47,10 @@ router.post("/", requireAuth, requireRole("BUYER"), async (req: AuthRequest, res
   });
 
   res.status(201).json(contract);
-});
+}));
 
-router.get("/mine", requireAuth, async (req: AuthRequest, res) => {
+// GET /contracts/mine - List contracts for the logged-in user (buyer or farmer)
+router.get("/mine", requireAuth, asyncHandler(async (req: AuthRequest, res) => {
   const contracts = await prisma.seasonalContract.findMany({
     where: {
       OR: [
@@ -62,9 +64,10 @@ router.get("/mine", requireAuth, async (req: AuthRequest, res) => {
     }
   });
   res.json(contracts);
-});
+}));
 
-router.patch("/:id/status", requireAuth, requireRole("FARMER"), async (req: AuthRequest, res) => {
+// PATCH /contracts/:id/status - Farmer accepts or rejects a contract
+router.patch("/:id/status", requireAuth, requireRole("FARMER"), asyncHandler(async (req: AuthRequest, res) => {
   const statusSchema = z.object({ status: z.enum(["ACTIVE", "CANCELLED"]) });
   const parseResult = statusSchema.safeParse(req.body);
   if (!parseResult.success) {
@@ -90,6 +93,6 @@ router.patch("/:id/status", requireAuth, requireRole("FARMER"), async (req: Auth
   });
 
   res.json(updatedContract);
-});
+}));
 
 export default router;

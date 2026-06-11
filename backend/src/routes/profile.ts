@@ -3,17 +3,20 @@ import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { requireAuth, requireRole, AuthRequest } from "../middleware/auth.js";
 import { securityLog } from "../lib/security.js";
+import { asyncHandler } from "../middleware/asyncHandler.js";
 
 const router = Router();
 
 const updateRoleSchema = z.object({
-  role: z.enum(["BUYER", "FARMER", "EXPERT", "MODERATOR", "ANALYST"])
+  role: z.enum(["BUYER", "FARMER"])
 });
 
 const updateProfileSchema = z.object({
+  name: z.string().trim().max(100).optional(),
   region: z.string().trim().max(100).optional(),
   buyerType: z.enum(["INDIVIDUAL", "TRADER", "RESTAURANT", "INSTITUTION", "INDUSTRY"]).optional(),
-  isPremium: z.boolean().optional()
+  email: z.string().email().or(z.string().length(0)).nullable().optional(),
+  avatarUrl: z.string().url().or(z.string().length(0)).nullable().optional()
 });
 
 function publicUser(user: {
@@ -24,6 +27,8 @@ function publicUser(user: {
   isVerified: boolean;
   isPremium: boolean;
   region: string;
+  email?: string | null;
+  avatarUrl?: string | null;
   buyerType?: string | null;
   rating?: any;
   createdAt: Date;
@@ -37,6 +42,8 @@ function publicUser(user: {
     isVerified: user.isVerified,
     isPremium: user.isPremium,
     region: user.region,
+    email: user.email,
+    avatarUrl: user.avatarUrl,
     buyerType: user.buyerType,
     rating: user.rating ? parseFloat(user.rating.toString()) : 0,
     createdAt: user.createdAt,
@@ -45,32 +52,32 @@ function publicUser(user: {
 }
 
 // GET /profile/me - Frontend fetchProfile() calls this
-router.get("/me", requireAuth, async (req: AuthRequest, res) => {
+router.get("/me", requireAuth, asyncHandler(async (req: AuthRequest, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
   if (!user) {
     return res.status(404).json({ error: "Not found" });
   }
   res.json(publicUser(user));
-});
+}));
 
 // GET /profile - Legacy endpoint
-router.get("/", requireAuth, async (req: AuthRequest, res) => {
+router.get("/", requireAuth, asyncHandler(async (req: AuthRequest, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
   if (!user) {
     return res.status(404).json({ error: "Not found" });
   }
   res.json(publicUser(user));
-});
+}));
 
 // PATCH /profile/role - Change own role (only BUYER <-> FARMER)
-router.patch("/role", requireAuth, async (req: AuthRequest, res) => {
+router.patch("/role", requireAuth, asyncHandler(async (req: AuthRequest, res) => {
   const parseResult = updateRoleSchema.safeParse(req.body);
   if (!parseResult.success) {
     return res.status(400).json({ error: "Payload invalid" });
   }
 
-  // Prevent admin-level users from self-modifying critical roles
-  if (["MODERATOR", "ANALYST", "SUPER_ADMIN"].includes(req.user!.role)) {
+  // Prevent admin-level users from self-modifying their roles
+  if (req.user!.role !== "BUYER" && req.user!.role !== "FARMER") {
     securityLog("blocked_privileged_self_role_change", { userId: req.user!.id });
     return res.status(403).json({ error: "Forbidden" });
   }
@@ -82,10 +89,10 @@ router.patch("/role", requireAuth, async (req: AuthRequest, res) => {
 
   securityLog("user_role_changed", { userId: user.id, role: user.role });
   res.json(publicUser(user));
-});
+}));
 
 // PATCH /profile - Update own profile (region, buyer type, premium)
-router.patch("/", requireAuth, async (req: AuthRequest, res) => {
+router.patch("/", requireAuth, asyncHandler(async (req: AuthRequest, res) => {
   const parseResult = updateProfileSchema.safeParse(req.body);
   if (!parseResult.success) {
     return res.status(400).json({ error: "Payload invalid" });
@@ -93,14 +100,17 @@ router.patch("/", requireAuth, async (req: AuthRequest, res) => {
 
   const user = await prisma.user.update({
     where: { id: req.user!.id },
-    data: parseResult.data
+    data: {
+      ...parseResult.data,
+      ...(parseResult.data.name && { name: parseResult.data.name })
+    }
   });
 
   res.json(publicUser(user));
-});
+}));
 
 // POST /profile/verify - Submit identity verification request
-router.post("/verify", requireAuth, async (req: AuthRequest, res) => {
+router.post("/verify", requireAuth, asyncHandler(async (req: AuthRequest, res) => {
   const docSchema = z.object({
     identityCardUrl: z.string().min(3),
     parcelPhotoUrl: z.string().optional(),
@@ -130,6 +140,32 @@ router.post("/verify", requireAuth, async (req: AuthRequest, res) => {
   });
 
   res.status(201).json(request);
-});
+}));
+
+// POST /profile/delete-request - Request account deletion
+router.post("/delete-request", requireAuth, asyncHandler(async (req: AuthRequest, res) => {
+  const schema = z.object({ reason: z.string().optional() });
+  const parseResult = schema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res.status(400).json({ error: "Payload invalid" });
+  }
+
+  const existing = await prisma.accountDeletionRequest.findFirst({
+    where: { userId: req.user!.id, status: "PENDING" }
+  });
+
+  if (existing) {
+    return res.status(409).json({ error: "Une demande de suppression est déjà en attente." });
+  }
+
+  const request = await prisma.accountDeletionRequest.create({
+    data: {
+      userId: req.user!.id,
+      reason: parseResult.data.reason
+    }
+  });
+
+  res.status(201).json(request);
+}));
 
 export default router;

@@ -122,11 +122,13 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      // Alias @ to the src directory
       '@': path.resolve(__dirname, './frontend/src'),
     },
   },
 
-  // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
+  // appType spa ensures all paths fallback to index.html (default in Vite)
+  appType: 'spa',
+
+  // File types to support raw imports
   assetsInclude: ['**/*.svg', '**/*.csv'],
 })

@@ -1,7 +1,6 @@
-import { apiFetch, clearStoredAccessToken, setStoredAccessToken } from "./api";
-import { getConfig } from "./config";
+import { apiFetch, clearStoredAccessToken, getStoredAccessToken, setStoredAccessToken, triggerGlobalError } from "./api";
 
-export type UserRole = "BUYER" | "FARMER" | "REGULATOR";
+export type UserRole = "BUYER" | "FARMER" | "REGULATOR" | "MODERATOR" | "SUPER_ADMIN" | "ANALYST";
 
 export interface UserProfile {
   id: string;
@@ -10,154 +9,56 @@ export interface UserProfile {
   role: UserRole;
   isVerified?: boolean;
   isPremium?: boolean;
-}
-
-const SESSION_KEY = "magro_mock_session";
-
-function getMockSession(): UserProfile | null {
-  const data = localStorage.getItem(SESSION_KEY);
-  if (!data) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(data) as UserProfile;
-  } catch {
-    return null;
-  }
-}
-
-function setMockSession(profile: UserProfile) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(profile));
-}
-
-function clearMockSession() {
-  localStorage.removeItem(SESSION_KEY);
-}
-
-function getMockToken() {
-  return `dev.${crypto.randomUUID()}`;
+  rating?: number;
+  email?: string | null;
+  avatarUrl?: string | null;
+  region?: string;
+  buyerType?: string;
 }
 
 export async function requestOtp(phone: string, isSignup: boolean = false): Promise<{ message: string }> {
-  const cfg = getConfig();
+  return await apiFetch<{ message: string }>("/auth/request-otp", {
+    method: "POST",
+    body: JSON.stringify({ phone, isSignup })
+  });
+}
 
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
-    void phone;
-    return { message: "OTP envoye (mode simule)" };
-  }
-
-  try {
-    return await apiFetch<{ message: string }>("/auth/request-otp", {
-      method: "POST",
-      body: JSON.stringify({ phone, isSignup })
-    });
-  } catch (err) {
-    if (cfg.mockDataEnabled || (import.meta.env.MODE === "development" && err instanceof Error && err.message.includes("Failed to fetch"))) {
-      console.warn("[Auth] API indisponible pour OTP, fallback mock", err);
-      if (!isSignup && phone !== "+22370000000" && phone !== "+22370000001") {
-        throw new Error("Vous n'avez pas de compte, inscrivez-vous.");
-      }
-      return { message: "OTP envoyé (mode simulé — backend hors ligne)" };
-    }
-    throw err;
-  }
+export async function resendOtp(phone: string): Promise<{ message: string }> {
+  return await apiFetch<{ message: string }>("/auth/resend-otp", {
+    method: "POST",
+    body: JSON.stringify({ phone })
+  });
 }
 
 export async function verifyOtp(
   phone: string,
-  otp: string
+  otp: string,
+  name?: string,
+  role?: string
 ): Promise<{ accessToken: string; user: UserProfile }> {
-  const cfg = getConfig();
-
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
-    const storedRole = (localStorage.getItem("magro_user_role")?.toUpperCase() as UserRole | undefined) ?? "BUYER";
-    const role: UserRole = storedRole === "FARMER" ? "FARMER" : "BUYER";
-    const mockProfile: UserProfile = {
-      id: "mock-user-1",
-      phone,
-      name: "Moussa Kouyate",
-      role,
-      isVerified: localStorage.getItem("magro_verified_status") === "true",
-      isPremium: localStorage.getItem("magro_premium_status") === "true"
-    };
-    setMockSession(mockProfile);
-    return { accessToken: getMockToken(), user: mockProfile };
-  }
-
-  try {
-    const result = await apiFetch<{ accessToken: string; user: UserProfile }>("/auth/verify-otp", {
-      method: "POST",
-      body: JSON.stringify({ phone, otp })
-    });
-    setStoredAccessToken(result.accessToken);
-    return result;
-  } catch (err) {
-    if (cfg.mockDataEnabled || (import.meta.env.MODE === "development" && err instanceof Error && err.message.includes("Failed to fetch"))) {
-      console.warn("[Auth] API indisponible pour verify OTP, fallback mock", err);
-      if (phone !== "+22370000000" && phone !== "+22370000001") {
-        // For fallback mock signups or other numbers, allow them but give a generic name
-      }
-      const storedRole = (localStorage.getItem("magro_user_role")?.toUpperCase() as UserRole | undefined) ?? "BUYER";
-      const role: UserRole = storedRole === "FARMER" ? "FARMER" : "BUYER";
-      const googleName = localStorage.getItem("magro_user_name");
-      const name = googleName || (phone === "+22370000000" ? "Agriculteur Test" : phone === "+22370000001" ? "Acheteur Test" : `Utilisateur ${phone.slice(-4)}`);
-      
-      const mockProfile: UserProfile = {
-        id: `mock-user-${phone.slice(-4)}`,
-        phone,
-        name,
-        role,
-        isVerified: false,
-        isPremium: false
-      };
-      setMockSession(mockProfile);
-      return { accessToken: getMockToken(), user: mockProfile };
-    }
-    throw err;
-  }
+  const result = await apiFetch<{ accessToken: string; user: UserProfile }>("/auth/verify-otp", {
+    method: "POST",
+    body: JSON.stringify({ 
+      phone, 
+      otp, 
+      name, 
+      ...(role && { role: role.toUpperCase() }) 
+    })
+  });
+  setStoredAccessToken(result.accessToken);
+  return result;
 }
 
 export async function fetchProfile(): Promise<UserProfile> {
-  const cfg = getConfig();
-
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
-    const session = getMockSession();
-    if (session) {
-      return session;
-    }
-    throw new Error("No active session");
+  // If no in-memory token, try to restore session via refresh cookie first
+  if (!getStoredAccessToken()) {
+    await refreshSession().catch(() => {});
   }
-
-  try {
-    return await apiFetch<UserProfile>("/profile");
-  } catch (err) {
-    if (cfg.mockDataEnabled || (import.meta.env.MODE === "development" && err instanceof Error && err.message.includes("Failed to fetch"))) {
-      console.warn("[Auth] API indisponible pour profil, fallback mock", err);
-      const session = getMockSession();
-      if (session) return session;
-    }
-    throw err;
-  }
+  return await apiFetch<UserProfile>("/profile/me");
 }
 
 export async function updateRole(role: UserRole): Promise<UserProfile> {
-  const cfg = getConfig();
   localStorage.setItem("magro_user_role", role.toLowerCase());
-
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
-    const session = getMockSession();
-    const updated: UserProfile = session
-      ? { ...session, role }
-      : {
-          id: "mock-user-1",
-          phone: "+22370000001",
-          name: "Moussa Kouyate",
-          role
-        };
-    setMockSession(updated);
-    return updated;
-  }
 
   try {
     return await apiFetch<UserProfile>("/profile/role", {
@@ -165,42 +66,30 @@ export async function updateRole(role: UserRole): Promise<UserProfile> {
       body: JSON.stringify({ role })
     });
   } catch (err) {
-    console.warn("[Auth] API indisponible pour rôle, fallback mock", err);
-    const session = getMockSession();
-    const updated: UserProfile = session
-      ? { ...session, role }
-      : { id: "mock-user-1", phone: "+22370000001", name: "Moussa Kouyaté", role };
-    setMockSession(updated);
-    return updated;
+    throw err;
   }
 }
 
 export async function logout(): Promise<void> {
-  const cfg = getConfig();
-
-  clearMockSession();
   clearStoredAccessToken();
   localStorage.removeItem("magro_user_role");
   localStorage.removeItem("magro_verified_status");
   localStorage.removeItem("magro_premium_status");
 
-  if (cfg.isApiAvailable && !cfg.mockDataEnabled) {
-    await apiFetch<void>("/auth/logout", {
-      method: "POST"
-    }).catch(() => undefined);
-  }
+  const isAdmin = window.location.pathname.includes("/admin");
 
-  // Force page reload to clear React state and return to login
-  window.location.href = "/";
+  await apiFetch<void>("/auth/logout", {
+    method: "POST"
+  }).catch(() => undefined);
+
+  if (isAdmin) {
+    window.location.href = "/admin";
+  } else {
+    window.location.href = "/";
+  }
 }
 
 export async function refreshSession(): Promise<string | null> {
-  const cfg = getConfig();
-
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
-    return getMockSession() ? getMockToken() : null;
-  }
-
   try {
     const result = await apiFetch<{ accessToken: string }>("/auth/refresh", {
       method: "POST",
@@ -214,4 +103,11 @@ export async function refreshSession(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+export async function requestAccountDeletion(reason?: string): Promise<void> {
+  await apiFetch<void>("/profile/delete-request", {
+    method: "POST",
+    body: JSON.stringify({ reason })
+  });
 }

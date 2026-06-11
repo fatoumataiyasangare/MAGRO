@@ -1,8 +1,66 @@
-node_modules
-dist
+# ─── Dependencies ───────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+
+# ─── Build output ────────────────────────────────────────────────
+dist/
+backend/dist/
+frontend/dist/
+*.tsbuildinfo
+
+# ─── Environment & Secrets ──────────────────────────────────────
 .env
 *.env
+.env.*
+!.env.example
 backend/.env
 frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# ─── Logs ────────────────────────────────────────────────────────
 npm-debug.log*
-.npm-cache
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+logs/
+
+# ─── OS & Editor ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ─── Large binaries & local DB ───────────────────────────────────
+postgres.zip
+*.zip
+*.tar.gz
+pg_extracted/
+
+# ─── Local scripts & test artefacts ─────────────────────────────
+start_db.sh
+stop_db.sh
+test_api.bat
+test_otp.json
+test_verify.json
+cookies.txt
+last10.txt
+fix_async.js
+
+# ─── Backend dev/scratch scripts (not part of app) ───────────────
+backend/test.js
+backend/list_users.cjs
+backend/setup_admins.cjs
+backend/get_farmers.ts
+backend/seed.sql
+backend/seed_admins.ts
+frontend/screenshot.mjs
+
+# ─── Business documents (keep locally, not in public repo) ───────
+*.docx

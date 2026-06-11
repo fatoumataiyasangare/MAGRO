@@ -3,20 +3,11 @@
  * 
  * Ce service gère l'authentification via le popup Google réel.
  * Le Google Client ID est configuré dans .env (VITE_GOOGLE_CLIENT_ID).
- * 
- * Flux:
- * 1. L'utilisateur clique sur "Continuer avec Google"
- * 2. Le popup Google natif s'affiche (sélection de compte)
- * 3. Google renvoie un credential (JWT id_token)
- * 4. Le frontend decode le JWT pour extraire le profil
- * 5. Le profil est stocké localement et l'utilisateur est connecté
- * 
- * En production, le credential devrait être envoyé au backend
- * pour validation côté serveur via l'API Google.
  */
 
 import { jwtDecode } from "jwt-decode";
 import type { UserProfile } from "./auth";
+import { apiFetch, setStoredAccessToken, triggerGlobalError } from "./api";
 
 // Le credential Google est un JWT contenant ces champs
 interface GoogleCredentialPayload {
@@ -41,36 +32,51 @@ function decodeGoogleCredential(credential: string): GoogleCredentialPayload {
 }
 
 /**
- * Traite la réponse du popup Google et renvoie un UserProfile.
- * Cette fonction est appelée par le composant GoogleLogin onSuccess.
+ * Traite la réponse du popup Google pour la CONNEXION et renvoie un UserProfile.
  */
-export function handleGoogleCredential(credential: string): UserProfile {
-  const decoded = decodeGoogleCredential(credential);
-  
-  const profile: UserProfile = {
-    id: `google-${decoded.sub}`,
-    phone: "+22370000000", // Google ne fournit pas de numéro de téléphone
-    name: decoded.name,
-    role: "BUYER" // Rôle par défaut, l'utilisateur peut changer ensuite
-  };
+export async function handleGoogleLogin(credential: string): Promise<UserProfile> {
+  try {
+    const result = await apiFetch<{ accessToken: string; user: UserProfile }>("/auth/google/login", {
+      method: "POST",
+      body: JSON.stringify({ credential })
+    });
+    
+    setStoredAccessToken(result.accessToken);
+    localStorage.setItem("magro_user_name", result.user.name);
+    
+    return result.user;
+  } catch (err: any) {
+    throw err;
+  }
+}
 
-  // Stocker la session
-  localStorage.setItem("magro_mock_session", JSON.stringify(profile));
-  localStorage.setItem("magro_user_name", decoded.name);
-  
-  console.log("✅ Authentification Google réussie:", decoded.name, decoded.email);
-  
-  return profile;
+/**
+ * Traite la réponse du popup Google pour l'INSCRIPTION et renvoie un UserProfile.
+ */
+export async function handleGoogleSignup(credential: string, role?: string, phone?: string): Promise<UserProfile> {
+  try {
+    const result = await apiFetch<{ accessToken: string; user: UserProfile }>("/auth/google/signup", {
+      method: "POST",
+      body: JSON.stringify({ credential, role: role ? role.toUpperCase() : undefined, phone })
+    });
+    
+    setStoredAccessToken(result.accessToken);
+    localStorage.setItem("magro_user_name", result.user.name);
+    
+    return result.user;
+  } catch (err: any) {
+    throw err;
+  }
 }
 
 /**
  * Obtenir le Google Client ID depuis les variables d'environnement
  */
-export function getGoogleClientId(): string | null {
+export function getGoogleClientId(): string {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   if (!clientId || clientId === "YOUR_GOOGLE_CLIENT_ID_HERE") {
-    console.warn("⚠️ VITE_GOOGLE_CLIENT_ID non configuré dans .env");
-    return null;
+    console.warn("⚠️ VITE_GOOGLE_CLIENT_ID non configuré dans .env, utilisation d'un fallback pour l'affichage");
+    return "987571438907-83nojnou0ks6qsc5dopu0rf5d4prf7bu.apps.googleusercontent.com";
   }
   return clientId;
 }

@@ -3,8 +3,8 @@ import { Phone, ArrowRight, ArrowLeft } from "lucide-react";
 import { motion } from "motion/react";
 import { GoogleLogin } from "@react-oauth/google";
 import logoMagro from "../assets/MAGRO.png";
-import { requestOtp, verifyOtp } from "../services/auth";
-import { handleGoogleCredential } from "../services/googleAuthService";
+import { requestOtp, verifyOtp, resendOtp } from "../services/auth";
+import { handleGoogleLogin, getGoogleClientId } from "../services/googleAuthService";
 import { validateMalianPhone } from "../services/phoneValidation";
 
 interface LoginScreenProps {
@@ -20,6 +20,8 @@ export default function LoginScreen({ onComplete, onBack, onNavigateToSignup }: 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [countdown, setCountdown] = useState(0);
+
+  const googleClientId = getGoogleClientId();
 
   // Gérer le compte à rebours
   React.useEffect(() => {
@@ -40,25 +42,44 @@ export default function LoginScreen({ onComplete, onBack, onNavigateToSignup }: 
     setPhoneNumber(formattedPhone);
     setIsLoading(true);
     try {
-      await requestOtp(formattedPhone);
+      const result = await requestOtp(formattedPhone);
       setStep("otp");
       setCountdown(60);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Impossible d'envoyer le code OTP. Vérifiez que le backend est lancé.");
+    } catch (error: any) {
+      setErrorMessage(error instanceof Error ? error.message : "Erreur lors de l'envoi de l'OTP");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleOtpChange = async (index: number, value: string) => {
-    if (value.length > 1) return;
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
+    const numericValue = value.replace(/[^0-9]/g, "");
+    
+    if (!numericValue) {
+      const newOtp = [...otp];
+      newOtp[index] = "";
+      setOtp(newOtp);
+      return;
+    }
 
-    if (value && index < 5) {
+    const newOtp = [...otp];
+    if (numericValue.length > 1) {
+      // Handle paste
+      for (let i = 0; i < numericValue.length && index + i < 6; i++) {
+        newOtp[index + i] = numericValue[i];
+      }
+      setOtp(newOtp);
+      const nextIndex = Math.min(index + numericValue.length, 5);
       const inputs = document.querySelectorAll<HTMLInputElement>(".otp-input");
-      inputs[index + 1]?.focus();
+      inputs[nextIndex]?.focus();
+    } else {
+      // Handle single character typing
+      newOtp[index] = numericValue;
+      setOtp(newOtp);
+      if (index < 5) {
+        const inputs = document.querySelectorAll<HTMLInputElement>(".otp-input");
+        inputs[index + 1]?.focus();
+      }
     }
 
     if (newOtp.every((digit) => digit !== "")) {
@@ -66,6 +87,8 @@ export default function LoginScreen({ onComplete, onBack, onNavigateToSignup }: 
       setIsLoading(true);
       try {
         await verifyOtp(phoneNumber, newOtp.join(""));
+        // Clear OTP fields on success
+        setOtp(["", "", "", "", "", ""]);
         setTimeout(onComplete, 500);
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Code de vérification invalide");
@@ -86,21 +109,29 @@ export default function LoginScreen({ onComplete, onBack, onNavigateToSignup }: 
     }
   };
 
-  const handleGoogleSuccess = (credentialResponse: any) => {
+  const handleGoogleSuccess = async (credentialResponse: any) => {
     if (credentialResponse.credential) {
+      setIsLoading(true);
+      setErrorMessage("");
       try {
-        handleGoogleCredential(credentialResponse.credential);
-        setTimeout(onComplete, 500);
-      } catch (error) {
-        setErrorMessage("Erreur lors de l'authentification Google.");
+        await handleGoogleLogin(credentialResponse.credential);
+        onComplete();
+      } catch (err: any) {
+        if (err.message) {
+          setErrorMessage(err.message);
+        } else {
+          setErrorMessage("Échec de la connexion Google.");
+        }
+      } finally {
+        setIsLoading(false);
       }
     }
   };
 
   return (
     <div className="h-screen bg-white flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto flex flex-col justify-center px-6 py-8 max-w-md mx-auto w-full">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="my-auto">
+      <div className="flex-1 overflow-y-auto flex flex-col justify-start pt-4 px-6 pb-8 max-w-md mx-auto w-full">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
 
           {/* Back button */}
           <button
@@ -152,7 +183,7 @@ export default function LoginScreen({ onComplete, onBack, onNavigateToSignup }: 
               {errorMessage && (
                 <div className="text-center">
                   <p className="text-sm text-destructive">{errorMessage}</p>
-                  {errorMessage.includes("inscrivez-vous") && onNavigateToSignup && (
+                  {errorMessage.includes("inscrire") && onNavigateToSignup && (
                     <button 
                       onClick={onNavigateToSignup}
                       className="mt-2 text-sm text-primary font-semibold underline cursor-pointer"
@@ -172,26 +203,30 @@ export default function LoginScreen({ onComplete, onBack, onNavigateToSignup }: 
                 </div>
               </div>
 
-              {/* Vrai bouton Google OAuth — affiche le popup de sélection de compte */}
+              {/* Google Auth - real si client_id disponible, sinon mode démo */}
               <div className="flex justify-center">
-                <GoogleLogin
-                  onSuccess={handleGoogleSuccess}
-                  onError={() => setErrorMessage("Échec de la connexion Google. Réessayez.")}
-                  theme="outline"
-                  size="large"
-                  width="350"
-                  text="continue_with"
-                  shape="pill"
-                  locale="fr"
-                />
+                {googleClientId && (
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={() => setErrorMessage("Échec de la connexion Google. Réessayez.")}
+                    theme="outline"
+                    size="large"
+                    width="350"
+                    text="continue_with"
+                    shape="pill"
+                    locale="fr"
+                  />
+                )}
               </div>
             </div>
           ) : (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-              <div className="text-center mb-8">
+              <div className="text-center mb-6">
                 <h2 className="text-2xl font-bold mb-2">Code de vérification</h2>
                 <p className="text-muted-foreground text-sm">Code envoyé au {phoneNumber}</p>
               </div>
+
+
 
               <div className="flex justify-center gap-2 mb-8">
                 {otp.map((digit, index) => (
@@ -211,6 +246,33 @@ export default function LoginScreen({ onComplete, onBack, onNavigateToSignup }: 
 
               {errorMessage && <p className="text-sm text-destructive text-center mb-4">{errorMessage}</p>}
 
+              <button
+                onClick={async () => {
+                  if (otp.some(d => d === "")) {
+                    setErrorMessage("Veuillez saisir les 6 chiffres du code");
+                    return;
+                  }
+                  setErrorMessage("");
+                  setIsLoading(true);
+                  try {
+                    await verifyOtp(phoneNumber, otp.join(""));
+                    setOtp(["", "", "", "", "", ""]);
+                    setTimeout(onComplete, 500);
+                  } catch (error) {
+                    setErrorMessage(error instanceof Error ? error.message : "Code de vérification invalide");
+                    setOtp(["", "", "", "", "", ""]);
+                    const inputs = document.querySelectorAll<HTMLInputElement>(".otp-input");
+                    inputs[0]?.focus();
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                disabled={isLoading}
+                className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-bold text-lg mb-6 shadow-[0_4px_14px_0_rgb(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-1 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {isLoading ? "Validation..." : "Valider"}
+              </button>
+
               <div className="text-center mb-6">
                 {countdown > 0 ? (
                   <p className="text-sm text-muted-foreground">
@@ -218,10 +280,25 @@ export default function LoginScreen({ onComplete, onBack, onNavigateToSignup }: 
                   </p>
                 ) : (
                   <button 
-                    onClick={() => { setCountdown(60); requestOtp(phoneNumber); }}
-                    className="text-secondary text-sm font-semibold hover:underline cursor-pointer"
+                    onClick={async () => {
+                      setErrorMessage("");
+                      setIsLoading(true);
+                      try {
+                        await resendOtp(phoneNumber);
+                        setCountdown(60);
+                        setOtp(["", "", "", "", "", ""]);
+                        const inputs = document.querySelectorAll<HTMLInputElement>(".otp-input");
+                        inputs[0]?.focus();
+                      } catch (error) {
+                        setErrorMessage(error instanceof Error ? error.message : "Erreur lors du renvoi du code");
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={isLoading}
+                    className="text-secondary text-sm font-semibold hover:underline cursor-pointer disabled:opacity-50"
                   >
-                    Renvoyer le code
+                    {isLoading ? "Envoi en cours..." : "Renvoyer le code"}
                   </button>
                 )}
               </div>

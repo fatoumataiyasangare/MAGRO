@@ -1,5 +1,4 @@
 import { apiFetch } from "./api";
-import { getConfig } from "./config";
 
 export interface Dispute {
   id: string;
@@ -17,90 +16,15 @@ export interface Dispute {
   cropName: string;
 }
 
-const LOCAL_STORAGE_KEY = "magro_mock_disputes";
-
-function getMockDisputes(): Dispute[] {
-  const data = localStorage.getItem(LOCAL_STORAGE_KEY);
-  if (!data) {
-    const initial: Dispute[] = [
-      {
-        id: "dis-1",
-        orderId: "ord-1",
-        openedBy: "buyer-1",
-        reason: "Écart de quantité de tomates constatée lors de la livraison (40 kg reçus au lieu de 50 kg).",
-        status: "NEW",
-        createdAt: new Date(Date.now() - 1000 * 3600 * 5).toISOString(),
-        orderPrice: 37500,
-        buyerName: "Amadou K.",
-        cropName: "Tomates fraîches"
-      }
-    ];
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initial));
-    return initial;
-  }
-  return JSON.parse(data);
-}
-
-function saveMockDisputes(disputes: Dispute[]) {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(disputes));
-}
-
-export async function openDispute(orderId: string, reason: string, orderPrice = 10000, cropName = "Produit", buyerName = "Client") {
-  const cfg = getConfig();
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
-    const disputes = getMockDisputes();
-    const newDispute: Dispute = {
-      id: "dis-" + Date.now(),
-      orderId,
-      openedBy: "mock-buyer",
-      reason,
-      status: "NEW",
-      createdAt: new Date().toISOString(),
-      orderPrice,
-      buyerName,
-      cropName
-    };
-    disputes.push(newDispute);
-    saveMockDisputes(disputes);
-    return newDispute;
-  }
-
-  try {
-    return await apiFetch<Dispute>("/orders/" + orderId + "/dispute", {
-      method: "POST",
-      body: JSON.stringify({ reason })
-    });
-  } catch (err) {
-    console.warn("[Disputes] API indisponible, fallback mock", err);
-    const disputes = getMockDisputes();
-    const newDispute: Dispute = {
-      id: "dis-" + Date.now(),
-      orderId,
-      openedBy: "mock-buyer",
-      reason,
-      status: "NEW",
-      createdAt: new Date().toISOString(),
-      orderPrice,
-      buyerName,
-      cropName
-    };
-    disputes.push(newDispute);
-    saveMockDisputes(disputes);
-    return newDispute;
-  }
+export async function openDispute(orderId: string, reason: string) {
+  return await apiFetch<Dispute>("/orders/" + orderId + "/dispute", {
+    method: "POST",
+    body: JSON.stringify({ reason })
+  });
 }
 
 export async function fetchDisputes() {
-  const cfg = getConfig();
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
-    return getMockDisputes();
-  }
-  try {
-    return await apiFetch<Dispute[]>("/admin/disputes");
-  } catch (err) {
-    console.warn("[Disputes] API indisponible, fallback mock", err);
-    return getMockDisputes();
-  }
+  return await apiFetch<Dispute[]>("/admin/disputes");
 }
 
 export async function resolveDispute(
@@ -109,46 +33,15 @@ export async function resolveDispute(
   splitRatio?: number,
   note?: string
 ) {
-  const cfg = getConfig();
-  if (!cfg.isApiAvailable || cfg.mockDataEnabled) {
-    const disputes = getMockDisputes();
-    const idx = disputes.findIndex((d) => d.id === disputeId);
-    if (idx !== -1) {
-      disputes[idx] = {
-        ...disputes[idx],
-        status: "RESOLVED",
-        adminDecision: decision,
-        splitRatio,
-        decisionNote: note,
-        decidedBy: "mock-moderator"
-      };
-      saveMockDisputes(disputes);
-      return disputes[idx];
-    }
-    throw new Error("Litige non trouvé");
-  }
+  return await apiFetch<Dispute>(`/admin/disputes/${disputeId}/resolve`, {
+    method: "PATCH",
+    body: JSON.stringify({ decision, splitRatio, decisionNote: note })
+  });
+}
 
-  try {
-    return await apiFetch<Dispute>(`/admin/disputes/${disputeId}/resolve`, {
-      method: "PATCH",
-      body: JSON.stringify({ decision, splitRatio, decisionNote: note })
-    });
-  } catch (err) {
-    console.warn("[Disputes] API indisponible, fallback mock", err);
-    const disputes = getMockDisputes();
-    const idx = disputes.findIndex((d) => d.id === disputeId);
-    if (idx !== -1) {
-      disputes[idx] = {
-        ...disputes[idx],
-        status: "RESOLVED",
-        adminDecision: decision,
-        splitRatio,
-        decisionNote: note,
-        decidedBy: "mock-moderator"
-      };
-      saveMockDisputes(disputes);
-      return disputes[idx];
-    }
-    throw new Error("Litige non trouvé");
-  }
+export async function updateDisputeStatus(disputeId: string, status: string, note?: string) {
+  return await apiFetch<Dispute>(`/admin/disputes/${disputeId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, decisionNote: note })
+  });
 }

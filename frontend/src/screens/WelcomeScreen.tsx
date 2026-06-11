@@ -11,7 +11,7 @@ interface WelcomeScreenProps {
 export default function WelcomeScreen({ onLogin, onSignup, onTerms }: WelcomeScreenProps) {
   return (
     <div className="h-screen bg-gradient-to-b from-primary/5 via-white to-secondary/5 flex flex-col overflow-hidden">
-      <div className="flex-1 flex flex-col justify-center items-center px-6 py-8 max-w-md mx-auto w-full">
+      <div className="flex-1 flex flex-col items-center px-6 pt-8 max-w-md mx-auto w-full">
         {/* Logo + Tagline */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}

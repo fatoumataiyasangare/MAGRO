@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, Truck, Phone, MapPin, Star, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { getInitials } from "../utils/format";
 
 interface TransportNegotiationProps {
   onBack: () => void;
@@ -129,7 +130,7 @@ export default function TransportNegotiationScreen({ onBack, orderId, orderCrop,
                   <div className="flex items-start gap-3 mb-3">
                     {/* Avatar */}
                     <div className="w-12 h-12 bg-primary/15 rounded-full flex items-center justify-center text-primary font-bold text-lg flex-shrink-0">
-                      {t.name.charAt(0)}
+                      {getInitials(t.name)}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
@@ -222,7 +223,7 @@ export default function TransportNegotiationScreen({ onBack, orderId, orderCrop,
               <div className="bg-white rounded-2xl p-4 border border-border shadow-sm">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-12 h-12 bg-primary/15 rounded-full flex items-center justify-center text-primary font-bold text-lg">
-                    {selectedTransporter?.name.charAt(0)}
+                    {getInitials(selectedTransporter?.name)}
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-900">{selectedTransporter?.name}</h3>

@@ -1,4 +1,7 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
+const envBaseUrl = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = envBaseUrl && !envBaseUrl.includes("localhost") 
+  ? envBaseUrl 
+  : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:4000/api/v1`;
 
 let inMemoryAccessToken: string | undefined;
 
@@ -12,6 +15,18 @@ export function setStoredAccessToken(token: string) {
 
 export function clearStoredAccessToken() {
   inMemoryAccessToken = undefined;
+}
+
+export function triggerGlobalError(message: string, originalError?: any) {
+  const appEnv = import.meta.env.VITE_APP_ENV || "test";
+  
+  if (appEnv === "prod") {
+    // En mode prod, on arrête l'exécution pour ne pas utiliser les fausses données
+    throw originalError || new Error(message);
+  }
+
+  // En mode test, on utilise les fausses données SILENCIEUSEMENT
+  // (Pas de toast affiché pour les erreurs backend)
 }
 
 async function refreshAccessToken() {

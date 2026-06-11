@@ -1,18 +1,22 @@
-import { ArrowLeft, Star, MapPin, MessageCircle, Award, FileSpreadsheet } from "lucide-react";
+import { useToast } from "../components/ToastProvider";
+import { ArrowLeft, Star, MapPin, MessageCircle, Award, FileSpreadsheet, Phone } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
 import { Product } from "./MarketplaceHomeMVP";
 import { fetchCertificationRequests } from "../services/certifications";
 import { createSeasonalContract } from "../services/contracts";
+import { getInitials } from "../utils/format";
 
 interface ProductDetailMVPProps {
-  product: Product;
+  product: Product & { videoUrl?: string | null; farmerPhone?: string };
   onBack: () => void;
   onOrder: () => void;
   onChat: () => void;
+  onFarmerClick?: (farmerName: string) => void;
 }
 
-export default function ProductDetailMVP({ product, onBack, onOrder, onChat }: ProductDetailMVPProps) {
+export default function ProductDetailMVP({ product, onBack, onOrder, onChat, onFarmerClick }: ProductDetailMVPProps) {
+  const { showToast } = useToast();
   const [certs, setCerts] = useState<any[]>([]);
   const [showContractDialog, setShowContractDialog] = useState(false);
   
@@ -33,7 +37,7 @@ export default function ProductDetailMVP({ product, onBack, onOrder, onChat }: P
 
   const getProductCert = () => {
     return certs.find(
-      c => c.status === "ACTIVE" && 
+      c => c.status === "ACTIVE" && c.farmerId === product.farmerId &&
       (c.cropName.toLowerCase().includes(product.name.toLowerCase()) || 
        product.name.toLowerCase().includes(c.cropName.toLowerCase()))
     );
@@ -44,7 +48,7 @@ export default function ProductDetailMVP({ product, onBack, onOrder, onChat }: P
   const handleProposeContract = async () => {
     try {
       await createSeasonalContract({
-        farmerId: "farmer-1", // Vendeur cible
+        farmerId: product.farmerId, // Vendeur cible
         farmerName: product.farmer,
         cropName: product.name,
         totalQuantityKg: qtyTons * 1000,
@@ -53,10 +57,10 @@ export default function ProductDetailMVP({ product, onBack, onOrder, onChat }: P
         seasonEnd,
         deliverySchedule: { type: "mensuel", details: `${Math.round((qtyTons * 1000) / 6)} kg par mois` }
       });
-      alert(`Proposition de contrat saisonnier de ${qtyTons} tonnes envoyée à ${product.farmer}.`);
+      showToast(`Proposition de contrat saisonnier de ${qtyTons} tonnes envoyée à ${product.farmer}.`, "success");
       setShowContractDialog(false);
     } catch (err) {
-      alert("Erreur lors de l'envoi du contrat.");
+      showToast("Erreur lors de l'envoi du contrat.", "error");
     }
   };
 
@@ -149,7 +153,10 @@ export default function ProductDetailMVP({ product, onBack, onOrder, onChat }: P
           )}
 
           {/* Farmer Info */}
-          <div className="bg-muted rounded-2xl p-4">
+          <div 
+            className="bg-muted rounded-2xl p-4 cursor-pointer hover:bg-gray-200 transition-colors"
+            onClick={() => onFarmerClick?.(product.farmer)}
+          >
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Agriculteur</h3>
               <button
@@ -162,7 +169,7 @@ export default function ProductDetailMVP({ product, onBack, onOrder, onChat }: P
             </div>
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center text-primary text-lg font-bold">
-                {product.farmer.charAt(0)}
+                {getInitials(product.farmer)}
               </div>
               <div>
                 <p className="text-base font-semibold text-gray-900 mb-1">{product.farmer}</p>
@@ -173,6 +180,50 @@ export default function ProductDetailMVP({ product, onBack, onOrder, onChat }: P
               </div>
             </div>
           </div>
+
+          {/* Video presentation */}
+          {(product as any).videoUrl && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <span>🎬</span> Vidéo de présentation
+              </h3>
+              {(() => {
+                const url: string = (product as any).videoUrl;
+                // YouTube embed
+                const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))(\w+)/);
+                if (ytMatch) {
+                  return (
+                    <iframe
+                      src={`https://www.youtube.com/embed/${ytMatch[1]}`}
+                      className="w-full rounded-2xl aspect-video border border-border"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      title="Vidéo du produit"
+                    />
+                  );
+                }
+                // TikTok embed
+                if (url.includes("tiktok.com")) {
+                  return (
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary underline text-sm py-3">
+                      <span>🎵</span> Voir la vidéo TikTok du producteur
+                    </a>
+                  );
+                }
+                // Generic video file
+                return (
+                  <video
+                    src={url}
+                    controls
+                    className="w-full rounded-2xl border border-border"
+                    style={{ maxHeight: 300 }}
+                  >
+                    Votre navigateur ne supporte pas la lecture vidéo.
+                  </video>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Description */}
           <div className="space-y-2">

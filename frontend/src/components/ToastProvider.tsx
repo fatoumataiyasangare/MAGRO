@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { CheckCircle, AlertCircle, X, Info } from "lucide-react";
 
@@ -38,6 +38,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const dismissToast = (id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
+
+  // Listen for global magro-error events
+  useEffect(() => {
+    const handleGlobalError = (e: any) => {
+      showToast(e.detail || "Une erreur est survenue", "error");
+    };
+    window.addEventListener("magro-error", handleGlobalError);
+    return () => window.removeEventListener("magro-error", handleGlobalError);
+  }, [showToast]);
 
   const getIcon = (type: ToastType) => {
     switch (type) {

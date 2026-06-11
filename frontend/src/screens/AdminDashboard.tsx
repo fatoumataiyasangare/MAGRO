@@ -1,6 +1,9 @@
-import { Monitor, Shield, TrendingUp, Users, FileText, BarChart3, Home as HomeIcon, MessageCircle, User, Settings, Award, ShieldAlert, Key, Download, Check, X, FileSpreadsheet } from "lucide-react";
+import { Monitor, Shield, TrendingUp, Users, FileText, BarChart3, Home as HomeIcon, MessageCircle, User, Settings, Award, ShieldAlert, Key, Download, Check, X, FileSpreadsheet, Trash2, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
+import { useToast } from "../components/ToastProvider";
+import { useUnreadCount } from "../services/chat";
+import { apiFetch, getStoredAccessToken } from "../services/api";
 
 function formatPrice(value: number) {
   return `${new Intl.NumberFormat("fr-FR").format(value)} FCFA`;
@@ -8,32 +11,37 @@ function formatPrice(value: number) {
 
 // Services frontend
 import { fetchVerificationRequests, processVerificationRequest, VerificationRequest } from "../services/verifications";
-import { fetchDisputes, resolveDispute, Dispute } from "../services/disputes";
+import { fetchDisputes, resolveDispute, updateDisputeStatus, Dispute } from "../services/disputes";
 import { fetchCertificationRequests, submitInspectionScore, Certification } from "../services/certifications";
 
 interface AdminDashboardProps {
   userName: string;
   onNavigate: (screen: string) => void;
+  propRole?: "MODERATOR" | "SUPER_ADMIN" | "ANALYST";
+  onLogout?: () => void;
 }
 
-export default function AdminDashboard({ userName, onNavigate }: AdminDashboardProps) {
+export default function AdminDashboard({ userName, onNavigate, propRole, onLogout }: AdminDashboardProps) {
+  const { showToast } = useToast();
+  const unreadCount = useUnreadCount();
+  const adminRole = propRole;
   const [activeTab, setActiveTab] = useState("home"); // home or monitor
-  const [subTab, setSubTab] = useState("verifications"); // verifications, disputes, experts, analyst
+  const [subTab, setSubTab] = useState(adminRole === "ANALYST" ? "analyst" : "verifications");
 
   // Data states
   const [verRequests, setVerRequests] = useState<VerificationRequest[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [certRequests, setCertRequests] = useState<Certification[]>([]);
-
-  // Plafond role (simulated: 'MODERATOR' or 'SUPER_ADMIN')
-  const [adminRole, setAdminRole] = useState<"MODERATOR" | "SUPER_ADMIN">("MODERATOR");
+  const [stats, setStats] = useState<any>(null);
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [deletionRequests, setDeletionRequests] = useState<any[]>([]);
 
   // Rejection/Decision modal states
   const [showRejectionInput, setShowRejectionInput] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   
   const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
-  const [disputeDecision, setDisputeDecision] = useState<"FARMER_WINS" | "BUYER_WINS" | "SPLIT" | "PARTIAL_REFUND">("FARMER_WINS");
+  const [disputeDecision, setDisputeDecision] = useState<"FARMER_WINS" | "BUYER_WINS" | "SPLIT" | "PARTIAL_REFUND" | "ESCALATE">("ESCALATE");
   const [disputeRatio, setDisputeRatio] = useState(0.5);
   const [disputeNote, setDisputeNote] = useState("");
 
@@ -46,14 +54,16 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
   const [scoreTrace, setScoreTrace] = useState(8); // max 10
 
   // API Key state
-  const [apiKeys, setApiKeys] = useState<{ id: string; name: string; quota: number }[]>([
-    { id: "key-1", name: "JICA Mali Tracker", quota: 1000 },
-    { id: "key-2", name: "Ministère Agriculture DNA", quota: 5000 }
-  ]);
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyQuota, setNewKeyQuota] = useState(2000);
 
   const loadData = async () => {
+    // Guard: don't make API calls if there's no access token
+    if (!getStoredAccessToken()) {
+      console.warn("AdminDashboard: no token, skipping data load");
+      return;
+    }
     try {
       const vReqs = await fetchVerificationRequests();
       setVerRequests(vReqs);
@@ -61,6 +71,20 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
       setDisputes(dis);
       const certs = await fetchCertificationRequests();
       setCertRequests(certs);
+      try {
+        const realStats = await apiFetch<any>("/admin/stats");
+        setStats(realStats);
+      } catch {}
+      if (adminRole === "SUPER_ADMIN") {
+        try {
+          const fetchedUsers = await apiFetch<any[]>("/admin/users");
+          setAdminUsers(fetchedUsers);
+          const fetchedKeys = await apiFetch<any[]>("/admin/api-keys");
+          setApiKeys(fetchedKeys);
+          const fetchedDeletions = await apiFetch<any[]>("/admin/delete-requests");
+          setDeletionRequests(fetchedDeletions);
+        } catch {}
+      }
     } catch (err) {
       console.error(err);
     }
@@ -74,10 +98,10 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
   const handleApproveVerification = async (id: string) => {
     try {
       await processVerificationRequest(id, "APPROVED");
-      alert("Demande approuvée. Badge Vert activé pour le producteur.");
+      showToast("Demande approuvée. Badge Vert activé pour le producteur.", "success");
       loadData();
     } catch (err) {
-      alert("Erreur lors du traitement.");
+      showToast("Erreur lors du traitement.", "error");
     }
   };
 
@@ -86,12 +110,12 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
     if (!showRejectionInput || !rejectionReason) return;
     try {
       await processVerificationRequest(showRejectionInput, "REJECTED", rejectionReason);
-      alert("Demande rejetée. Motif envoyé à l'utilisateur.");
+      showToast("Demande rejetée. Motif envoyé à l'utilisateur.", "success");
       setShowRejectionInput(null);
       setRejectionReason("");
       loadData();
     } catch (err) {
-      alert("Erreur lors du traitement.");
+      showToast("Erreur lors du traitement.", "error");
     }
   };
 
@@ -99,24 +123,29 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
   const handleResolveDispute = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDispute || !disputeNote) {
-      alert("Veuillez saisir une note de décision explicative.");
+      showToast("Veuillez saisir une note de décision explicative.", "error");
       return;
     }
 
     // Plafond check (1 000 000 FCFA)
     if (selectedDispute.orderPrice > 1000000 && adminRole !== "SUPER_ADMIN") {
-      alert("⚠️ Escalation requise : Les litiges sur des montants supérieurs à 1 000 000 FCFA doivent obligatoirement être tranchés par un Super Administrateur. Veuillez modifier votre profil en Super Admin dans les paramètres simulés.");
+      showToast("⚠️ Escalation requise : Les litiges sur des montants supérieurs à 1 000 000 FCFA doivent obligatoirement être tranchés par un Super Administrateur.", "error");
       return;
     }
 
     try {
-      await resolveDispute(selectedDispute.id, disputeDecision, disputeRatio, disputeNote);
-      alert(`Litige résolu avec succès. Décision : ${disputeDecision}`);
+      if (disputeDecision === "ESCALATE") {
+        await updateDisputeStatus(selectedDispute.id, "IN_REVIEW", disputeNote);
+        showToast("Litige transmis à l'autorité compétente au Mali (En attente).", "success");
+      } else {
+        await resolveDispute(selectedDispute.id, disputeDecision, disputeRatio, disputeNote);
+        showToast(`Litige résolu avec succès. Décision : ${disputeDecision}`, "success");
+      }
       setSelectedDispute(null);
       setDisputeNote("");
       loadData();
     } catch (err) {
-      alert("Erreur lors de la résolution du litige.");
+      showToast("Erreur lors de la résolution du litige.", "error");
     }
   };
 
@@ -132,11 +161,64 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
         practices: scorePractices,
         traceability: scoreTrace
       });
-      alert(`Score total de ${totalScore}/100 enregistré. Badge ${totalScore >= 80 ? "Or" : "Argent"} attribué avec succès.`);
+      showToast(`Score total de ${totalScore}/100 enregistré. Badge ${totalScore >= 80 ? "Or" : "Argent"} attribué avec succès.`, "success");
       setSelectedCert(null);
       loadData();
     } catch (err) {
-      alert("Erreur lors de l'enregistrement de l'inspection.");
+      showToast("Erreur lors de l'enregistrement de l'inspection.", "error");
+    }
+  };
+
+  const handleSuspendUser = async (id: string, currentlySuspended: boolean) => {
+    try {
+      await apiFetch(`/admin/users/${id}/suspend`, {
+        method: "PATCH",
+        body: JSON.stringify({ suspend: !currentlySuspended })
+      });
+      showToast(currentlySuspended ? "Utilisateur débloqué avec succès." : "Utilisateur bloqué avec succès.", "success");
+      loadData();
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors du traitement.", "error");
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur DÉFINITIVEMENT ?")) {
+      try {
+        await apiFetch(`/admin/users/${id}`, { method: "DELETE" });
+        showToast("Utilisateur supprimé avec succès.", "success");
+        loadData();
+      } catch (err: any) {
+        showToast(err.message || "Impossible de supprimer l'utilisateur.", "error");
+      }
+    }
+  };
+
+  const handleApproveDeletion = async (id: string) => {
+    if (window.confirm("Êtes-vous sûr ? Cette action supprimera DÉFINITIVEMENT l'utilisateur et ses données.")) {
+      try {
+        await apiFetch(`/admin/delete-requests/${id}/approve`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "APPROVED" })
+        });
+        showToast("Compte supprimé avec succès.", "success");
+        loadData();
+      } catch (err: any) {
+        showToast(err.message || "Erreur lors de la suppression.", "error");
+      }
+    }
+  };
+
+  const handleRejectDeletion = async (id: string) => {
+    try {
+      await apiFetch(`/admin/delete-requests/${id}/approve`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "REJECTED" })
+      });
+      showToast("Demande de suppression rejetée.", "success");
+      loadData();
+    } catch (err) {
+      showToast("Erreur lors du rejet.", "error");
     }
   };
 
@@ -145,12 +227,12 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
     if (!newKeyName) return;
     setApiKeys([...apiKeys, { id: "key-" + Date.now(), name: newKeyName, quota: newKeyQuota }]);
     setNewKeyName("");
-    alert("Clé API institutionnelle créée.");
+    showToast("Clé API institutionnelle créée.", "success");
   };
 
   const handleRevokeApiKey = (id: string) => {
     setApiKeys(apiKeys.filter(k => k.id !== id));
-    alert("Clé API révoquée.");
+    showToast("Clé API révoquée.", "success");
   };
 
   // Data CSV export simulator
@@ -167,87 +249,87 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
     link.href = url;
     link.download = `magro_export_institutionnel_${Date.now()}.${format}`;
     link.click();
-    alert(`Fichier anonymisé exporté au format ${format.toUpperCase()}`);
+    showToast(`Fichier anonymisé exporté au format ${format.toUpperCase()}`, "success");
   };
 
-  const totalVolume = disputes.reduce((sum, d) => sum + d.orderPrice, 0) + 1545000;
+  const totalVolume = disputes.reduce((sum, d) => sum + d.orderPrice, 0);
 
   return (
-    <div className="h-screen bg-muted flex flex-col pb-20">
+    <div className="h-full bg-muted flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-br from-primary to-primary/80 text-white px-6 pt-6 pb-8">
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-gradient-to-br from-primary to-primary/80 text-white px-6 pt-6 pb-6 shrink-0">
+        <div className="flex items-center justify-between mb-2">
           <div>
-            <p className="text-2xl font-bold tracking-wide mb-1">MAGRO</p>
-            <h1 className="text-lg font-semibold">Bonjour, {userName} 👋</h1>
+            <p className="text-xl font-bold tracking-wide">MAGRO</p>
+            <h1 className="text-base font-semibold">Bonjour, {userName} 👋</h1>
             
-            {/* RBAC Role Selector (Dev Only) */}
-            <div className="flex items-center gap-2 mt-2">
-              <select 
-                value={adminRole}
-                onChange={(e) => setAdminRole(e.target.value as any)}
-                className="bg-white/20 text-white text-[10px] px-2 py-1 rounded-full border border-white/30 cursor-pointer appearance-none"
-              >
-                <option value="MODERATOR" className="text-gray-900">🛡️ Modérateur</option>
-                <option value="ANALYST" className="text-gray-900">📊 Analyste</option>
-                <option value="SUPER_ADMIN" className="text-gray-900">👑 Super Admin</option>
-              </select>
-            </div>
+            <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full font-medium mt-1 inline-block">
+              {adminRole === "SUPER_ADMIN" ? "👑 Super Admin" : adminRole === "ANALYST" ? "📊 Analyste" : "🛡️ Modérateur"}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <button 
               onClick={() => { setActiveTab("monitor"); setSubTab("verifications"); }}
               className="relative p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
             >
-              <Shield className="w-5 h-5" />
+              <Shield className="w-4 h-4" />
             </button>
             <button 
               onClick={() => { setActiveTab("monitor"); setSubTab("disputes"); }}
               className="relative p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
             >
-              <Monitor className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-secondary text-[10px] rounded-full flex items-center justify-center font-bold">
+              <Monitor className="w-4 h-4" />
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-secondary text-[9px] rounded-full flex items-center justify-center font-bold">
                 {verRequests.filter(r => r.status === "PENDING").length + disputes.filter(d => d.status === "NEW").length}
               </span>
             </button>
+            {onLogout && (
+              <button 
+                onClick={onLogout}
+                className="relative p-2 bg-red-500/80 rounded-lg hover:bg-red-600 transition-colors ml-2"
+                title="Se déconnecter"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Main content router */}
-      <div className="flex-1 overflow-y-auto px-6 pt-4">
+      <div className="flex-1 overflow-y-auto px-6 pt-4 pb-32">
         {activeTab === "home" ? (
           /* General Dashboard Home View */
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 gap-3 -mt-10">
-              <div className="bg-white rounded-xl p-4 shadow-sm flex items-center justify-between border border-border">
+            <div className="grid grid-cols-1 gap-3">
+              <div className="bg-white rounded-xl p-3 shadow-sm flex items-center justify-between border border-border">
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Dossiers d'identité en attente (Badge Vert)</div>
-                  <div className="text-2xl font-bold text-primary">{verRequests.filter(r => r.status === "PENDING").length}</div>
+                  <div className="text-[11px] text-muted-foreground mb-1">Dossiers d'identité en attente</div>
+                  <div className="text-xl font-bold text-primary">{verRequests.filter(r => r.status === "PENDING").length}</div>
                 </div>
-                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-                  <Shield className="w-6 h-6" />
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                  <Shield className="w-5 h-5" />
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl p-4 shadow-sm flex items-center justify-between border border-border">
+              <div className="bg-white rounded-xl p-3 shadow-sm flex items-center justify-between border border-border">
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Litiges à instruire (Disputes)</div>
-                  <div className="text-2xl font-bold text-red-600">{disputes.filter(d => d.status === "NEW").length}</div>
+                  <div className="text-[11px] text-muted-foreground mb-1">Litiges à instruire</div>
+                  <div className="text-xl font-bold text-red-600">{disputes.filter(d => d.status === "NEW").length}</div>
                 </div>
-                <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center text-red-600">
-                  <ShieldAlert className="w-6 h-6" />
+                <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center text-red-600">
+                  <ShieldAlert className="w-5 h-5" />
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl p-4 shadow-sm flex items-center justify-between border border-border">
+              <div className="bg-white rounded-xl p-3 shadow-sm flex items-center justify-between border border-border">
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Inspections Qualité requises (Experts CAA)</div>
-                  <div className="text-2xl font-bold text-amber-600">{certRequests.filter(c => c.status === "PENDING" || c.status === "SUSPENDED").length}</div>
+                  <div className="text-[11px] text-muted-foreground mb-1">Inspections Qualité requises</div>
+                  <div className="text-xl font-bold text-amber-600">{certRequests.filter(c => c.status === "PENDING" || c.status === "SUSPENDED").length}</div>
                 </div>
-                <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
-                  <Award className="w-6 h-6" />
+                <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
+                  <Award className="w-5 h-5" />
                 </div>
               </div>
             </div>
@@ -287,6 +369,16 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
                   <BarChart3 className="w-6 h-6 text-blue-600" />
                   <span className="text-xs font-semibold">Analyste / Clés</span>
                 </button>
+
+                {adminRole === "SUPER_ADMIN" && (
+                  <button
+                    onClick={() => { setActiveTab("monitor"); setSubTab("users"); }}
+                    className="bg-white p-4 rounded-xl text-center border border-border flex flex-col items-center gap-1.5"
+                  >
+                    <Users className="w-6 h-6 text-purple-600" />
+                    <span className="text-xs font-semibold">Utilisateurs</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -301,7 +393,11 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
                   { id: "disputes", label: "Litiges" },
                   { id: "experts", label: "Inspections (Expert)" },
                 ] : []),
-                { id: "analyst", label: "Statistiques & API" }
+                ...(adminRole === "SUPER_ADMIN" ? [
+                  { id: "users", label: "Utilisateurs" }
+                ] : []),
+                { id: "analyst", label: "Statistiques & API" },
+                { id: "deletions", label: "Suppressions" }
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -408,9 +504,12 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
                           <span className="text-muted-foreground text-[10px]">Acheteur : {dis.buyerName}</span>
                         </div>
                         <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
-                          dis.status === "RESOLVED" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                          dis.status === "RESOLVED" ? "bg-green-100 text-green-800" : 
+                          dis.status === "IN_REVIEW" ? "bg-yellow-100 text-yellow-800" :
+                          "bg-red-100 text-red-800"
                         }`}>
-                          {dis.status === "RESOLVED" ? "Tranché" : "À instruire"}
+                          {dis.status === "RESOLVED" ? "Tranché" : 
+                           dis.status === "IN_REVIEW" ? "En Autorité" : "À instruire"}
                         </span>
                       </div>
 
@@ -486,7 +585,7 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
                     { label: "Volume Séquestré", value: formatPrice(totalVolume), color: "text-primary", bg: "bg-blue-50", icon: "🔒" },
                     { label: "Commissions prélevées", value: formatPrice(Math.round(totalVolume * 0.02)), color: "text-green-700", bg: "bg-green-50", icon: "💰" },
                     { label: "Litiges résolus", value: `${disputes.filter(d => d.status === "RESOLVED").length}/${disputes.length}`, color: "text-amber-700", bg: "bg-amber-50", icon: "⚖️" },
-                    { label: "Badges Or actifs", value: "3", color: "text-amber-600", bg: "bg-amber-50", icon: "🟡" },
+                    { label: "Badges Or/Argent actifs", value: certRequests.filter(c => c.status === "ACTIVE").length.toString(), color: "text-amber-600", bg: "bg-amber-50", icon: "🟡" },
                   ].map(kpi => (
                     <div key={kpi.label} className={`${kpi.bg} rounded-xl p-3 border border-white shadow-sm`}>
                       <div className="text-lg mb-0.5">{kpi.icon}</div>
@@ -503,51 +602,18 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
                     <span className="text-[10px] text-green-600 font-semibold">● En direct</span>
                   </div>
                   <div className="divide-y divide-gray-50">
-                    {[
-                      { date: "01 Juin", desc: "Commande Tomates – Amadou → Fatoumata", type: "credit", amount: 37500 },
-                      { date: "01 Juin", desc: "Commission MAGRO 2%", type: "commission", amount: 750 },
-                      { date: "31 Mai", desc: "Fonds libérés – Confirmation livraison #2A4", type: "release", amount: 25000 },
-                      { date: "30 Mai", desc: "Litige résolu – Remboursement partiel #1B7", type: "refund", amount: -12000 },
-                      { date: "29 Mai", desc: "Commande Oignons – Ibrahim → GMM", type: "credit", amount: 80000 },
-                    ].map((entry, i) => (
-                      <div key={i} className="px-4 py-2.5 flex items-center justify-between">
-                        <div className="flex-1">
-                          <p className="text-gray-800 font-medium text-[11px]">{entry.desc}</p>
-                          <p className="text-muted-foreground text-[10px]">{entry.date}</p>
-                        </div>
-                        <div className={`font-bold text-xs ml-2 ${
-                          entry.type === "refund" ? "text-red-600" :
-                          entry.type === "commission" ? "text-amber-600" :
-                          entry.type === "release" ? "text-green-600" : "text-primary"
-                        }`}>
-                          {entry.amount < 0 ? "-" : "+"}{formatPrice(Math.abs(entry.amount))}
-                        </div>
-                      </div>
-                    ))}
+                    <div className="px-4 py-6 text-center text-muted-foreground text-xs">
+                      Aucune transaction récente enregistrée dans le grand livre.
+                    </div>
                   </div>
                 </div>
 
-                {/* Market Stats — for JICA / DNA */}
+                 {/* Market Stats — for JICA / DNA */}
                 <div className="bg-white p-4 rounded-xl border border-border space-y-3 text-xs shadow-sm">
                   <h4 className="font-bold text-gray-700 uppercase tracking-wider text-[10px]">📊 Statistiques Marché (Partenaires)</h4>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    {[
-                      { label: "Tomates", value: "750 F/kg", trend: "+12%" },
-                      { label: "Oignons", value: "500 F/kg", trend: "-5%" },
-                      { label: "Mangues", value: "1200 F/kg", trend: "+20%" },
-                    ].map(stat => (
-                      <div key={stat.label} className="bg-muted rounded-lg p-2">
-                        <p className="text-[9px] text-muted-foreground">{stat.label}</p>
-                        <p className="font-bold text-gray-900 text-[11px]">{stat.value}</p>
-                        <p className={`text-[9px] font-semibold ${stat.trend.startsWith("+") ? "text-green-600" : "text-red-600"}`}>
-                          {stat.trend}
-                        </p>
-                      </div>
-                    ))}
+                  <div className="text-center py-4 text-muted-foreground text-xs">
+                    Aucune donnée statistique disponible pour le moment.
                   </div>
-                  <p className="text-[10px] text-muted-foreground">
-                    Données agrégées et anonymisées — Régions pilotes : Sikasso, Koulikoro, Ségou, Kayes, Bamako
-                  </p>
                 </div>
 
                 {/* Institutional Export */}
@@ -609,6 +675,117 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
                 </div>
               </div>
             )}
+
+            {/* 5. Deletion Requests panel */}
+            {subTab === "deletions" && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-gray-800">Demandes de suppression de compte</h3>
+                
+                {deletionRequests.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4 bg-white rounded-xl">Aucune demande de suppression.</p>
+                ) : (
+                  deletionRequests.map((req) => (
+                    <div key={req.id} className="bg-white p-4 rounded-xl border border-border space-y-3 text-xs shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <strong className="text-gray-900 block">{req.user?.name}</strong>
+                          <span className="text-muted-foreground text-[10px]">Téléphone: {req.user?.phone} • Rôle: {req.user?.role}</span>
+                        </div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                          req.status === "PENDING" ? "bg-yellow-100 text-yellow-800" :
+                          req.status === "APPROVED" ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"
+                        }`}>
+                          {req.status}
+                        </span>
+                      </div>
+                      
+                      {req.reason && (
+                        <div className="text-[11px] text-gray-600 italic bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                          "Motif: {req.reason}"
+                        </div>
+                      )}
+
+                      {req.status === "PENDING" && (
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => handleApproveDeletion(req.id)}
+                            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Confirmer (Irréversible)
+                          </button>
+                          <button
+                            onClick={() => handleRejectDeletion(req.id)}
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2 rounded-lg"
+                          >
+                            Refuser
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* 6. Users Management panel (Super Admin only) */}
+            {subTab === "users" && adminRole === "SUPER_ADMIN" && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-gray-800">Gestion des Utilisateurs</h3>
+                
+                {adminUsers.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4 bg-white rounded-xl">Aucun utilisateur trouvé.</p>
+                ) : (
+                  adminUsers.map((u) => {
+                    const isSuspended = u.suspensionUntil != null;
+                    return (
+                      <div key={u.id} className="bg-white p-4 rounded-xl border border-border space-y-3 text-xs shadow-sm">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <strong className="text-gray-900 block text-sm">{u.name}</strong>
+                            <span className="text-muted-foreground text-[11px] block mt-0.5">Téléphone: {u.phone}</span>
+                            <span className="text-muted-foreground text-[11px] block">Rôle: <span className="font-semibold text-primary">{u.role}</span></span>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                            isSuspended ? "bg-red-100 text-red-800" :
+                            u.isVerified ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                          }`}>
+                            {isSuspended ? "Bloqué" : u.isVerified ? "Vérifié" : "Non vérifié"}
+                          </span>
+                        </div>
+
+                        <div className="flex gap-2 pt-2 border-t border-gray-100">
+                          {/* Protect Super Admins from being modified */}
+                          {u.role === "SUPER_ADMIN" ? (
+                            <div className="w-full text-center text-muted-foreground italic text-[10px]">
+                              Compte administrateur protégé
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleSuspendUser(u.id, isSuspended)}
+                                className={`flex-1 font-bold py-2 rounded-lg transition-colors ${
+                                  isSuspended 
+                                  ? "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200" 
+                                  : "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"
+                                }`}
+                              >
+                                {isSuspended ? "Débloquer" : "Bloquer"}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(u.id)}
+                                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-1"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Supprimer
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -645,6 +822,7 @@ export default function AdminDashboard({ userName, onNavigate }: AdminDashboardP
                     onChange={(e) => setDisputeDecision(e.target.value as any)}
                     className="w-full p-2 bg-gray-50 border rounded-lg"
                   >
+                    <option value="ESCALATE">Transmettre à l'autorité compétente (Mali)</option>
                     <option value="FARMER_WINS">Donner gain au producteur (Libérer fonds)</option>
                     <option value="BUYER_WINS">Rembourser l'acheteur</option>
                     <option value="SPLIT">Partage proportionnel (Split)</option>

@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { requireAuth, requireRole, AuthRequest } from "../middleware/auth.js";
 import { uuidSchema } from "../lib/security.js";
+import { asyncHandler } from "../middleware/asyncHandler.js";
 
 const router = Router();
 
@@ -22,8 +23,23 @@ const submitScoreSchema = z.object({
   })
 });
 
+// GET /
+router.get("/", requireAuth, asyncHandler(async (req: AuthRequest, res) => {
+  const whereClause = ["EXPERT", "MODERATOR", "SUPER_ADMIN", "ANALYST"].includes(req.user!.role)
+    ? {} 
+    : { farmerId: req.user!.id };
+
+  const certs = await prisma.certification.findMany({
+    where: whereClause,
+    include: { farmer: { select: { id: true, name: true } } },
+    orderBy: { createdAt: "desc" }
+  });
+  
+  res.json(certs);
+}));
+
 // POST /certifications/request
-router.post("/request", requireAuth, requireRole("FARMER"), async (req: AuthRequest, res) => {
+router.post("/request", requireAuth, requireRole("FARMER"), asyncHandler(async (req: AuthRequest, res) => {
   const parseResult = requestCertSchema.safeParse(req.body);
   if (!parseResult.success) {
     return res.status(400).json({ error: "Payload invalid" });
@@ -49,10 +65,10 @@ router.post("/request", requireAuth, requireRole("FARMER"), async (req: AuthRequ
   });
 
   res.status(201).json(request);
-});
+}));
 
 // POST /certifications/:id/score
-router.post("/:id/score", requireAuth, requireRole("EXPERT", "MODERATOR", "SUPER_ADMIN"), async (req: AuthRequest, res) => {
+router.post("/:id/score", requireAuth, requireRole("EXPERT", "MODERATOR", "SUPER_ADMIN"), asyncHandler(async (req: AuthRequest, res) => {
   const parseResult = submitScoreSchema.safeParse(req.body);
   if (!parseResult.success) {
     return res.status(400).json({ error: "Payload invalid" });
@@ -86,6 +102,6 @@ router.post("/:id/score", requireAuth, requireRole("EXPERT", "MODERATOR", "SUPER
   });
 
   res.json(updatedCert);
-});
+}));
 
 export default router;

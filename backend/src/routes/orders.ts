@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { requireAuth, requireRole, AuthRequest } from "../middleware/auth.js";
 import { uuidSchema } from "../lib/security.js";
+import { asyncHandler } from "../middleware/asyncHandler.js";
 
 const router = Router();
 
@@ -15,7 +16,18 @@ const createOrderSchema = z.object({
 });
 
 const updateStatusSchema = z.object({
-  status: z.enum(["CONFIRMED", "IN_PRODUCTION", "READY", "DELIVERED", "CANCELLED"])
+  status: z.enum([
+    "EN_ATTENTE",
+    "CONFIRMEE",
+    "CONFIRMED",
+    "IN_PRODUCTION",
+    "PRETE",
+    "READY",
+    "SHIPPED",
+    "DELIVERED",
+    "CANCELLED",
+    "DISPUTED"
+  ])
 });
 
 const openDisputeSchema = z.object({
@@ -23,7 +35,8 @@ const openDisputeSchema = z.object({
 });
 const orderIdSchema = z.object({ id: uuidSchema });
 
-router.post("/", requireAuth, requireRole("BUYER"), async (req: AuthRequest, res) => {
+// POST /orders - Create a new order (BUYER only)
+router.post("/", requireAuth, requireRole("BUYER"), asyncHandler(async (req: AuthRequest, res) => {
   const parseResult = createOrderSchema.safeParse(req.body);
   if (!parseResult.success) {
     return res.status(400).json({ error: "Payload invalid" });
@@ -61,9 +74,10 @@ router.post("/", requireAuth, requireRole("BUYER"), async (req: AuthRequest, res
   }
 
   res.status(201).json(order);
-});
+}));
 
-router.get("/mine", requireAuth, requireRole("FARMER"), async (req: AuthRequest, res) => {
+// GET /orders/mine - List orders for logged-in farmer
+router.get("/mine", requireAuth, requireRole("FARMER"), asyncHandler(async (req: AuthRequest, res) => {
   const orders = await prisma.order.findMany({
     where: {
       listing: {
@@ -82,6 +96,7 @@ router.get("/mine", requireAuth, requireRole("FARMER"), async (req: AuthRequest,
   res.json(
     orders.map((order) => ({
       id: order.id,
+      listingId: order.listingId,
       crop: order.listing.title,
       buyer: order.buyer.name,
       quantity: order.quantity,
@@ -95,10 +110,10 @@ router.get("/mine", requireAuth, requireRole("FARMER"), async (req: AuthRequest,
       paymentStatus: order.paymentStatus
     }))
   );
-});
+}));
 
 // PATCH /orders/:id/status - Farmer updates order status
-router.patch("/:id/status", requireAuth, requireRole("FARMER"), async (req: AuthRequest, res) => {
+router.patch("/:id/status", requireAuth, requireRole("FARMER"), asyncHandler(async (req: AuthRequest, res) => {
   const parseResult = updateStatusSchema.safeParse(req.body);
   if (!parseResult.success) {
     return res.status(400).json({ error: "Payload invalid" });
@@ -122,10 +137,10 @@ router.patch("/:id/status", requireAuth, requireRole("FARMER"), async (req: Auth
   });
 
   res.json(updated);
-});
+}));
 
 // POST /orders/:id/confirm-delivery - Buyer confirms receipt (releases escrow)
-router.post("/:id/confirm-delivery", requireAuth, requireRole("BUYER"), async (req: AuthRequest, res) => {
+router.post("/:id/confirm-delivery", requireAuth, requireRole("BUYER"), asyncHandler(async (req: AuthRequest, res) => {
   const params = orderIdSchema.safeParse(req.params);
   if (!params.success) {
     return res.status(400).json({ error: "Payload invalid" });
@@ -145,10 +160,10 @@ router.post("/:id/confirm-delivery", requireAuth, requireRole("BUYER"), async (r
   });
 
   res.json(updated);
-});
+}));
 
 // POST /orders/:id/dispute - Buyer opens a dispute
-router.post("/:id/dispute", requireAuth, requireRole("BUYER"), async (req: AuthRequest, res) => {
+router.post("/:id/dispute", requireAuth, requireRole("BUYER"), asyncHandler(async (req: AuthRequest, res) => {
   const parseResult = openDisputeSchema.safeParse(req.body);
   if (!parseResult.success) {
     return res.status(400).json({ error: "Payload invalid" });
@@ -178,6 +193,75 @@ router.post("/:id/dispute", requireAuth, requireRole("BUYER"), async (req: AuthR
   ]);
 
   res.status(201).json({ order: updatedOrder, dispute });
-});
+}));
+
+// GET /orders/buyer - List all orders of the logged-in buyer
+router.get("/buyer", requireAuth, requireRole("BUYER"), asyncHandler(async (req: AuthRequest, res) => {
+  const orders = await prisma.order.findMany({
+    where: { buyerId: req.user!.id },
+    include: {
+      listing: {
+        include: {
+          farmer: { select: { id: true, name: true } }
+        }
+      }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+
+  res.json(
+    orders.map((order) => ({
+      id: order.id,
+      crop: order.listing.title,
+      farmer: order.listing.farmer.name,
+      quantity: order.quantity,
+      status: order.status,
+      date: order.createdAt,
+      totalPrice: order.totalPrice,
+      unit: order.listing.unit,
+      depositRequired: order.depositRequired,
+      depositAmount: order.depositAmount,
+      riskScore: order.riskScore,
+      paymentStatus: order.paymentStatus
+    }))
+  );
+}));
+
+// POST /orders/:id/cancel - Cancel order and restore stock
+router.post("/:id/cancel", requireAuth, asyncHandler(async (req: AuthRequest, res) => {
+  const params = orderIdSchema.safeParse(req.params);
+  if (!params.success) {
+    return res.status(400).json({ error: "Payload invalid" });
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: params.data.id },
+    include: { listing: true }
+  });
+
+  if (!order) return res.status(404).json({ error: "Order not found" });
+
+  // Only the buyer or the farmer can cancel
+  if (order.buyerId !== req.user!.id && order.listing.farmerId !== req.user!.id) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.listing.update({
+      where: { id: order.listingId },
+      data: { quantity: { increment: order.quantity } }
+    });
+
+    return tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: "CANCELLED",
+        paymentStatus: "REFUNDED"
+      }
+    });
+  });
+
+  res.json(updated);
+}));
 
 export default router;

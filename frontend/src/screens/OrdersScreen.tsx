@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, CheckCircle, Clock, AlertCircle, ShieldAlert, Sparkles, Truck } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { fetchFarmerOrders, FarmerOrder, updateOrderStatus, confirmDelivery, cancelOrder } from "../services/orders";
+import { fetchFarmerOrders, fetchBuyerOrders, FarmerOrder, updateOrderStatus, confirmDelivery, cancelOrder } from "../services/orders";
 import { openDispute } from "../services/disputes";
-import { updateListingQuantity } from "../services/listings";
 import { useToast } from "../components/ToastProvider";
 
 interface Order {
@@ -26,7 +25,7 @@ interface Order {
 interface OrdersScreenMVPProps {
   onBack: () => void;
   onNavigate?: (screen: string) => void;
-  userRole?: "buyer" | "farmer" | "regulator" | null;
+  userRole?: string | null;
 }
 
 function formatStatus(status: string) {
@@ -38,7 +37,8 @@ function formatStatus(status: string) {
       return "Confirmée";
     case "PRETE":
     case "READY":
-      return "Prête (Livraison)";
+    case "SHIPPED":
+      return "En livraison";
     case "DELIVERED":
       return "Livrée";
     case "CANCELLED":
@@ -63,6 +63,10 @@ export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole
   // Expanded order card
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
+  // Modal states
+  const [orderToConfirm, setOrderToConfirm] = useState<string | null>(null);
+  const [orderToCancel, setOrderToCancel] = useState<string | null>(null);
+
   // Dispute form state
   const [disputeReason, setDisputeReason] = useState("");
   const [disputedOrderId, setDisputedOrderId] = useState<string | null>(null);
@@ -72,14 +76,15 @@ export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole
   const [ratingValue, setRatingValue] = useState(5);
 
   // Detect user role from local storage if not in props
-  const [role, setRole] = useState<"buyer" | "farmer" | "regulator">(() => {
+  const [role, setRole] = useState<string>(() => {
     if (propRole) return propRole;
-    return (localStorage.getItem("magro_user_role")?.toLowerCase() as any) || "buyer";
+    return (localStorage.getItem("magro_user_role")?.toLowerCase()) || "buyer";
   });
 
   const loadOrders = () => {
     setLoading(true);
-    fetchFarmerOrders()
+    const fetchFunc = role === "buyer" ? fetchBuyerOrders : fetchFarmerOrders;
+    fetchFunc()
       .then((remoteOrders) => {
         // En mode acheteur, filtrer les commandes passées par l'acheteur de test, sinon tout afficher pour le fermier
         const processed = remoteOrders.map((order) => ({
@@ -147,12 +152,9 @@ export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole
   };
 
   // Farmer accepts order (updates state CONFIRMEE)
-  const handleAcceptOrder = async (orderId: string, listingId?: string, rawQuantity?: number) => {
+  const handleAcceptOrder = async (orderId: string) => {
     try {
       await updateOrderStatus(orderId, "CONFIRMEE");
-      if (listingId && rawQuantity) {
-        await updateListingQuantity(listingId, rawQuantity);
-      }
       showToast("Commande acceptée avec succès ! Le stock a été mis à jour.", "success");
       loadOrders();
     } catch (err) {
@@ -174,19 +176,16 @@ export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole
   // Farmer marks crop as ready
   const handleReadyOrder = async (orderId: string) => {
     try {
-      await updateOrderStatus(orderId, "PRETE");
-      showToast("Commande marquée comme PRÊTE. L'acheteur a été notifié.", "success");
+      await updateOrderStatus(orderId, "SHIPPED");
+      showToast("La livraison a été lancée.", "success");
       loadOrders();
-    } catch (err) {
-      showToast("Impossible de modifier le statut.", "error");
+    } catch (err: any) {
+      showToast(err.message || "Erreur.", "error");
     }
   };
 
   // Buyer confirms delivery (Escrow release)
   const handleConfirmDelivery = async (orderId: string) => {
-    if (!confirm("Confirmez-vous la réception conforme ? Les fonds seront libérés.")) {
-      return;
-    }
     try {
       await confirmDelivery(orderId);
       showToast("Livraison confirmée. Fonds libérés vers l'agriculteur !", "success");
@@ -194,20 +193,19 @@ export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole
     } catch (err) {
       showToast("Erreur lors de la confirmation.", "error");
     }
+    setOrderToConfirm(null);
   };
 
   // Buyer cancels order
   const handleCancelOrder = async (orderId: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir annuler cette commande ?")) {
-      return;
-    }
     try {
       await cancelOrder(orderId);
-      showToast("Commande annulée et fonds remboursés.", "info");
+      showToast("Commande annulée et fonds remboursés.", "success");
       loadOrders();
     } catch (err: any) {
       showToast(err.message || "Erreur lors de l'annulation.", "error");
     }
+    setOrderToCancel(null);
   };
 
   // Buyer rates farmer
@@ -223,17 +221,10 @@ export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole
     if (!disputeReason || !disputedOrderId) return;
 
     try {
-      const order = orders.find((o) => o.id === disputedOrderId);
       await openDispute(
         disputedOrderId,
-        disputeReason,
-        order?.rawPrice,
-        order?.crop,
-        order?.buyer
+        disputeReason
       );
-      
-      // Update order status in orders database to DISPUTED
-      await updateOrderStatus(disputedOrderId, "DISPUTED");
       
       showToast("Litige ouvert. Les fonds sont gelés.", "info");
       setDisputedOrderId(null);
@@ -357,7 +348,7 @@ export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole
                       {order.status === "EN_ATTENTE" && (
                         <>
                           <button
-                            onClick={() => handleAcceptOrder(order.id, order.listingId, order.rawQuantity)}
+                            onClick={() => handleAcceptOrder(order.id)}
                             className="flex-1 bg-secondary text-white py-2 rounded-lg font-semibold text-xs"
                           >
                             Accepter la commande
@@ -373,12 +364,13 @@ export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole
                       {(order.status === "CONFIRMEE" || order.status === "CONFIRMED") && (
                         <button
                           onClick={() => handleReadyOrder(order.id)}
-                          className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold text-xs"
+                          className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5"
                         >
-                          Marquer comme prête (Récoltée)
+                          <Truck className="w-3.5 h-3.5" />
+                          Lancer la livraison
                         </button>
                       )}
-                      {order.status === "PRETE" && (
+                      {(order.status === "PRETE" || order.status === "SHIPPED") && (
                         <div className="w-full text-center text-muted-foreground p-1 text-xs">
                           En attente de confirmation de livraison par l'acheteur. Libération automatique sous 72h.
                         </div>
@@ -389,11 +381,19 @@ export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole
                   {/* Actions buttons for Buyer */}
                   {role === "buyer" && (
                     <div className="flex flex-col gap-2 pt-2">
-                      {order.status === "PRETE" && (
+                      {(order.status === "EN_ATTENTE" || order.status === "CONFIRMEE" || order.status === "CONFIRMED") && (
+                        <button
+                          onClick={() => setOrderToCancel(order.id)}
+                          className="w-full bg-red-100 text-red-700 hover:bg-red-200 py-2 rounded-lg font-semibold text-xs transition-colors"
+                        >
+                          Annuler la commande
+                        </button>
+                      )}
+                      {(order.status === "PRETE" || order.status === "SHIPPED") && (
                         <>
                           <div className="flex gap-2">
                             <button
-                              onClick={() => handleConfirmDelivery(order.id)}
+                              onClick={() => setOrderToConfirm(order.id)}
                               className="flex-1 bg-green-600 text-white py-2 rounded-lg font-semibold text-xs flex items-center justify-center gap-1"
                             >
                               <Sparkles className="w-3.5 h-3.5" />
@@ -432,7 +432,7 @@ export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole
                             En attente de confirmation de la part du producteur. (48h max)
                           </div>
                           <button
-                            onClick={() => handleCancelOrder(order.id)}
+                            onClick={() => setOrderToCancel(order.id)}
                             className="w-full bg-red-50 text-red-700 py-2 rounded-lg font-semibold text-xs border border-red-100 hover:bg-red-100 transition-colors"
                           >
                             Annuler la demande
@@ -521,6 +521,71 @@ export default function OrdersScreenMVP({ onBack, onNavigate, userRole: propRole
           ))
         )}
       </div>
+
+      {/* Confirmation Modals */}
+      {orderToConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-4"
+          >
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Confirmer la réception</h3>
+              <p className="text-sm text-gray-500">Confirmez-vous la réception conforme de votre commande ? Les fonds seront définitivement libérés vers l'agriculteur.</p>
+            </div>
+            <div className="flex gap-2 pt-4">
+              <button
+                onClick={() => handleConfirmDelivery(orderToConfirm)}
+                className="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-green-700 transition-colors"
+              >
+                Confirmer
+              </button>
+              <button
+                onClick={() => setOrderToConfirm(null)}
+                className="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-colors"
+              >
+                Annuler
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {orderToCancel && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-4"
+          >
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Annuler la commande</h3>
+              <p className="text-sm text-gray-500">Êtes-vous sûr de vouloir annuler cette commande ? Les fonds séquestrés vous seront remboursés.</p>
+            </div>
+            <div className="flex gap-2 pt-4">
+              <button
+                onClick={() => handleCancelOrder(orderToCancel)}
+                className="flex-1 bg-red-600 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-red-700 transition-colors"
+              >
+                Annuler la commande
+              </button>
+              <button
+                onClick={() => setOrderToCancel(null)}
+                className="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-colors"
+              >
+                Retour
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
 import { fetchMyContracts, updateContractStatus, SeasonalContract } from "../services/contracts";
 import { requestCertification, fetchCertificationRequests, Certification } from "../services/certifications";
+import { useUnreadCount } from "../services/chat";
 import { useToast } from "../components/ToastProvider";
 import MarketInsights from "../components/MarketInsights";
+import { getInitials } from "../utils/format";
 
 interface FarmerDashboardMVPProps {
   userName: string;
@@ -21,7 +23,9 @@ export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts
   const [showCertDialog, setShowCertDialog] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [certCrop, setCertCrop] = useState("Tomates fraîches");
-  const [unreadNotifications, setUnreadNotifications] = useState(2);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  const unreadCount = useUnreadCount();
 
   const stats = [
     { label: "Annonces", value: totalProducts.toString(), color: "text-blue-600" },
@@ -82,7 +86,7 @@ export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-xl font-bold">
-              {userName.charAt(0)}
+              {getInitials(userName)}
             </div>
             <div>
               <h1 className="text-lg font-semibold">Bonjour {userName} 👋</h1>
@@ -144,27 +148,17 @@ export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts
         
         {/* Analytics Mini-Dashboard */}
         <div className="bg-white rounded-2xl p-4 mb-6 shadow-sm border border-border">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-3">
             <h2 className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
               <BarChart3 className="w-4 h-4 text-primary" />
               Ventes de la semaine
             </h2>
-            <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-lg">+12%</span>
           </div>
-          <div className="flex items-end justify-between h-24 gap-2 mb-2">
-            {[40, 70, 45, 90, 65, 80, 100].map((height, i) => (
-              <div key={i} className="flex-1 flex flex-col justify-end items-center gap-1 group">
-                <div 
-                  className="w-full bg-secondary/20 rounded-t-sm group-hover:bg-secondary transition-colors"
-                  style={{ height: `${height}%` }}
-                ></div>
-                <span className="text-[10px] text-muted-foreground">
-                  {["L", "M", "M", "J", "V", "S", "D"][i]}
-                </span>
-              </div>
-            ))}
+          <div className="flex flex-col items-center justify-center py-6 text-center">
+            <BarChart3 className="w-8 h-8 text-gray-300 mb-2" />
+            <p className="text-xs text-muted-foreground">Aucune vente enregistrée cette semaine.</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Vos statistiques apparaîtront ici après vos premières ventes.</p>
           </div>
-          <p className="text-xs text-muted-foreground text-center font-medium">Revenus estimés : <span className="text-gray-900">450 000 FCFA</span></p>
         </div>
 
         <div className="grid grid-cols-2 gap-2 mb-6">
@@ -327,13 +321,10 @@ export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts
               </h3>
               
               <div className="space-y-3 pt-2">
-                <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
-                  <p className="text-sm font-semibold text-blue-900">Nouvelle commande !</p>
-                  <p className="text-xs text-blue-700 mt-1">L'acheteur Fatoumata K. a commandé 50kg de tomates.</p>
-                </div>
-                <div className="bg-green-50 p-3 rounded-xl border border-green-100">
-                  <p className="text-sm font-semibold text-green-900">Fonds libérés</p>
-                  <p className="text-xs text-green-700 mt-1">Le paiement pour la commande #234 a été viré sur votre portefeuille.</p>
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <Bell className="w-8 h-8 text-gray-300 mb-2" />
+                  <p className="text-xs text-muted-foreground">Aucune notification pour le moment.</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Vous serez notifié lors de nouvelles commandes ou événements.</p>
                 </div>
               </div>
 
@@ -438,11 +429,18 @@ export default function FarmerDashboardMVP({ userName, onNavigate, totalProducts
               setActiveTab("chat");
               onNavigate("chat");
             }}
-            className={`flex flex-col items-center gap-1 ${
-              activeTab === "chat" ? "text-primary" : "text-muted-foreground"
+            className={`relative flex flex-col items-center gap-1 ${
+              activeTab === "chat" ? "text-secondary" : "text-muted-foreground"
             }`}
           >
-            <MessageCircle className="w-6 h-6" />
+            <div className="relative">
+              <MessageCircle className="w-6 h-6" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </div>
             <span className="text-xs">Messages</span>
           </button>
           <button

@@ -1,3 +1,4 @@
+import { useToast } from "../components/ToastProvider";
 import { ArrowLeft, MessageCircle, PhoneCall, Mail, ChevronRight, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState } from "react";
@@ -7,6 +8,7 @@ interface SupportScreenProps {
 }
 
 export default function SupportScreen({ onBack }: SupportScreenProps) {
+  const { showToast } = useToast();
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
   const faqs = [
@@ -59,7 +61,7 @@ export default function SupportScreen({ onBack }: SupportScreenProps) {
             <h3 className="text-lg font-bold text-gray-900 mb-4">Nous contacter</h3>
             <div className="space-y-3">
               <button 
-                onClick={() => alert("Lancement de WhatsApp...")}
+                onClick={() => showToast("Lancement de WhatsApp...", "success")}
                 className="w-full flex items-center justify-between p-4 bg-green-50 rounded-xl hover:bg-green-100 transition-colors cursor-pointer border border-green-100"
               >
                 <div className="flex items-center gap-3">
@@ -73,7 +75,7 @@ export default function SupportScreen({ onBack }: SupportScreenProps) {
               </button>
               
               <button 
-                onClick={() => alert("Appel en cours vers le support client...")}
+                onClick={() => showToast("Appel en cours vers le support client...", "success")}
                 className="w-full flex items-center justify-between p-4 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors cursor-pointer border border-blue-100"
               >
                 <div className="flex items-center gap-3">
@@ -87,7 +89,7 @@ export default function SupportScreen({ onBack }: SupportScreenProps) {
               </button>
 
               <button 
-                onClick={() => alert("Ouverture du client mail...")}
+                onClick={() => showToast("Ouverture du client mail...", "success")}
                 className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer border border-gray-200"
               >
                 <div className="flex items-center gap-3">

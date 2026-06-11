@@ -1,22 +1,28 @@
-import { ArrowLeft, Settings, LogOut, ChevronRight, Star, Shield, Zap, Check, Globe, Bell, HelpCircle, X } from "lucide-react";
+import { ArrowLeft, Settings, LogOut, ChevronRight, Star, Shield, Zap, Check, Globe, Bell, HelpCircle, X, Package, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
 import { submitVerificationRequest } from "../services/verifications";
+import { UserProfile, requestAccountDeletion } from "../services/auth";
+import { fetchBuyerOrders, fetchFarmerOrders, FarmerOrder } from "../services/orders";
+import { useToast } from "../components/ToastProvider";
+import { getInitials } from "../utils/format";
 
 interface ProfileScreenMVPProps {
+  userProfile: UserProfile | null;
   userName: string;
-  userRole: "buyer" | "farmer" | "regulator";
+  userRole: "buyer" | "farmer" | "regulator" | "moderator" | "super_admin" | "analyst" | string;
   onBack: () => void;
   onLogout: () => void;
   onNavigate: (screen: string) => void;
 }
 
-export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout, onNavigate }: ProfileScreenMVPProps) {
-  const [buyerType, setBuyerType] = useState<string>(() => localStorage.getItem("magro_buyer_subtype") || "individual");
-  const [isPremium, setIsPremium] = useState<boolean>(() => localStorage.getItem("magro_premium_status") === "true");
-  const [isVerified, setIsVerified] = useState<boolean>(() => localStorage.getItem("magro_verified_status") === "true");
+export default function ProfileScreenMVP({ userProfile, userName, userRole, onBack, onLogout, onNavigate }: ProfileScreenMVPProps) {
+  const isAdmin = ["regulator", "moderator", "super_admin", "analyst"].includes(userRole);
+  const [buyerType, setBuyerType] = useState<string>(() => userProfile?.buyerType || localStorage.getItem("magro_buyer_subtype") || "individual");
+  const [isPremium, setIsPremium] = useState<boolean>(() => userProfile?.isPremium || localStorage.getItem("magro_premium_status") === "true");
+  const [isVerified, setIsVerified] = useState<boolean>(() => userProfile?.isVerified || localStorage.getItem("magro_verified_status") === "true");
   const [verificationSubmitted, setVerificationSubmitted] = useState<boolean>(() => localStorage.getItem("magro_verification_submitted") === "true");
-  
+
   // Verification form state
   const [showVerificationForm, setShowVerificationForm] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -24,16 +30,37 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
   const [parcelGps, setParcelGps] = useState("");
   const [bizReg, setBizReg] = useState("");
 
-  const orders = [
-    { id: "1", product: "Tomates fraîches", quantity: "50 kg", status: "Livrée", date: "15 Avr 2026" },
-    { id: "2", product: "Oignons blancs", quantity: "100 kg", status: "En cours", date: "20 Avr 2026" }
-  ];
+  // Real orders from API
+  const [orders, setOrders] = useState<FarmerOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState(false);
+
+  useEffect(() => {
+    if (isAdmin) return;
+    const fetchOrders = async () => {
+      setOrdersLoading(true);
+      setOrdersError(false);
+      try {
+        const data = userRole === "farmer"
+          ? await fetchFarmerOrders()
+          : await fetchBuyerOrders();
+        setOrders(data);
+      } catch {
+        setOrdersError(true);
+      } finally {
+        setOrdersLoading(false);
+      }
+    };
+    fetchOrders();
+  }, [userRole, isAdmin]);
+
+  const { showToast } = useToast();
 
   const handleBuyerTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     setBuyerType(val);
     localStorage.setItem("magro_buyer_subtype", val);
-    alert(`Type d'acheteur mis à jour : ${val}`);
+    showToast(`Type d'acheteur mis à jour : ${val}`, "success");
   };
 
   const handleTogglePremium = () => {
@@ -43,7 +70,7 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
   const handleVerificationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!idDoc) {
-      alert("La pièce d'identité est obligatoire.");
+      showToast("La pièce d'identité est obligatoire.", "error");
       return;
     }
     try {
@@ -57,10 +84,40 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
       setVerificationSubmitted(true);
       localStorage.setItem("magro_verification_submitted", "true");
       setShowVerificationForm(false);
-      alert("Votre dossier de vérification a été envoyé pour examen au modérateur MAGRO.");
+      showToast("Votre dossier de vérification a été envoyé pour examen au modérateur MAGRO.", "success");
     } catch (err) {
-      alert("Erreur lors de l'envoi du dossier.");
+      showToast("Erreur lors de l'envoi du dossier.", "error");
     }
+  };
+
+  const handleRequestDeletion = async () => {
+    if (window.confirm("Êtes-vous sûr de vouloir demander la suppression de votre compte ? Cette action sera envoyée à un administrateur pour confirmation.")) {
+      try {
+        await requestAccountDeletion("Demande utilisateur depuis l'application");
+        showToast("Votre demande de suppression a été envoyée. Elle sera traitée par l'administration MAGRO.", "success");
+      } catch (err: any) {
+        showToast(err.message || "Erreur lors de la demande de suppression.", "error");
+      }
+    }
+  };
+
+  const statusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      EN_ATTENTE: "En attente",
+      CONFIRMEE: "Confirmée",
+      PRETE: "Prête",
+      DELIVERED: "Livrée",
+      DISPUTED: "En litige",
+      CANCELLED: "Annulée"
+    };
+    return map[status] || status;
+  };
+
+  const statusColor = (status: string) => {
+    if (status === "DELIVERED" || status === "PRETE") return "bg-green-100 text-green-700";
+    if (status === "DISPUTED" || status === "CANCELLED") return "bg-red-100 text-red-700";
+    if (status === "CONFIRMEE") return "bg-blue-100 text-blue-700";
+    return "bg-gray-100 text-gray-700";
   };
 
   return (
@@ -80,8 +137,12 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
           animate={{ opacity: 1, y: 0 }}
         >
           <div className="relative">
-            <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center text-4xl mb-4">
-              {userName.charAt(0)}
+            <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center text-4xl mb-4 overflow-hidden">
+              {userProfile?.avatarUrl ? (
+                <img src={userProfile.avatarUrl} alt={userName} className="w-full h-full object-cover" />
+              ) : (
+                getInitials(userName)
+              )}
             </div>
             {isVerified && (
               <span className="absolute bottom-4 right-0 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center text-white" title="Profil vérifié (Badge Vert)">
@@ -97,11 +158,13 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
           <p className="text-white/80">
             {userRole === "farmer"
               ? "Agriculteur"
-              : userRole === "regulator"
-              ? "Projecteur & Régulateur"
+              : isAdmin
+              ? "Administration MAGRO"
               : "Acheteur"}
             {isPremium && " • Premium ✨"}
           </p>
+          {userProfile?.email && <p className="text-white/60 text-xs mt-1">{userProfile.email}</p>}
+          {userProfile?.phone && <p className="text-white/60 text-xs">{userProfile.phone.startsWith('google-') ? 'Google Account' : userProfile.phone}</p>}
         </motion.div>
       </div>
 
@@ -113,8 +176,8 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          {/* Subscriptions & Badges (New functional modules conforming to design) */}
-          {userRole !== "regulator" && (
+          {/* Subscriptions & Badges */}
+          {!isAdmin && (
             <div className="mb-6 space-y-3">
               {/* Premium subscription card */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-4 flex items-center justify-between">
@@ -163,7 +226,6 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
                   )}
                 </div>
 
-                {/* Submitting verification documents form */}
                 {showVerificationForm && (
                   <form onSubmit={handleVerificationSubmit} className="mt-4 pt-4 border-t border-green-200/50 space-y-3">
                     <div>
@@ -242,46 +304,57 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
           )}
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <div className="bg-muted rounded-2xl p-4 text-center">
-              <p className="text-2xl text-primary mb-1">8</p>
-              <p className="text-xs text-muted-foreground">Commandes</p>
+          {!isAdmin && (
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="bg-muted rounded-2xl p-4 text-center">
+                <p className="text-2xl text-primary mb-1">{ordersLoading ? "…" : orders.length}</p>
+                <p className="text-xs text-muted-foreground">Commandes</p>
+              </div>
+              <div className="bg-muted rounded-2xl p-4 text-center">
+                <p className="text-2xl text-secondary mb-1">{userProfile?.rating ? Number(userProfile.rating).toFixed(1) : "—"}</p>
+                <p className="text-xs text-muted-foreground">Note</p>
+              </div>
             </div>
-            <div className="bg-muted rounded-2xl p-4 text-center">
-              <p className="text-2xl text-secondary mb-1">4.5</p>
-              <p className="text-xs text-muted-foreground">Note</p>
-            </div>
-          </div>
+          )}
 
-          {/* Orders History */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg">Mes commandes</h3>
-              <button onClick={() => onNavigate('orders')} className="text-sm text-primary cursor-pointer">Voir tout</button>
-            </div>
+          {/* Orders History - REAL DATA */}
+          {!isAdmin && (
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg">Mes commandes</h3>
+                <button onClick={() => onNavigate('orders')} className="text-sm text-primary cursor-pointer">Voir tout</button>
+              </div>
 
-            <div className="space-y-3">
-              {orders.map((order) => (
-                <div key={order.id} className="bg-muted rounded-2xl p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h4 className="text-base mb-1">{order.product}</h4>
-                      <p className="text-sm text-muted-foreground">{order.quantity} • {order.date}</p>
-                    </div>
-                    <span
-                      className={`text-xs px-3 py-1 rounded-full ${
-                        order.status === "Livrée"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-blue-100 text-blue-700"
-                      }`}
-                    >
-                      {order.status}
-                    </span>
-                  </div>
+              {ordersLoading ? (
+                <div className="flex justify-center items-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
                 </div>
-              ))}
+              ) : ordersError ? (
+                <p className="text-center text-xs text-muted-foreground py-4">Impossible de charger les commandes.</p>
+              ) : orders.length === 0 ? (
+                <div className="flex flex-col items-center py-8 gap-2">
+                  <Package className="w-10 h-10 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">Aucune commande pour le moment</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {orders.slice(0, 3).map((order) => (
+                    <div key={order.id} className="bg-muted rounded-2xl p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <h4 className="text-base mb-1">{order.crop}</h4>
+                          <p className="text-sm text-muted-foreground">{order.quantity} kg • {new Date(order.date).toLocaleDateString("fr-FR")}</p>
+                        </div>
+                        <span className={`text-xs px-3 py-1 rounded-full ${statusColor(order.status)}`}>
+                          {statusLabel(order.status)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
           {/* Settings */}
           <div className="space-y-2 mb-8">
@@ -328,6 +401,19 @@ export default function ProfileScreenMVP({ userName, userRole, onBack, onLogout,
                         <p className="text-xs text-muted-foreground">Centre d'aide et FAQ — Contactez le support</p>
                       </div>
                     </div>
+                    {/* Suppression de compte - masquée pour les admins */}
+                    {!isAdmin && (
+                      <div 
+                        className="flex items-center gap-3 p-3 bg-red-50 rounded-lg cursor-pointer hover:bg-red-100"
+                        onClick={handleRequestDeletion}
+                      >
+                        <X className="w-5 h-5 text-red-600" />
+                        <div>
+                          <p className="text-sm font-medium text-red-600">Supprimer mon compte</p>
+                          <p className="text-xs text-red-500">Demander la suppression définitive</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}

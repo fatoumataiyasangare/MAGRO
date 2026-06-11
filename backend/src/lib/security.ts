@@ -91,14 +91,22 @@ export function requireTrustedOrigin(req: Request, res: Response, next: NextFunc
 export function setRefreshCookie(res: Response, token: string) {
   res.cookie("refreshToken", token, {
     httpOnly: true,
-    sameSite: "strict",
+    sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    path: "/api/v1/auth",
+    path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000
   });
 }
 
 export function clearRefreshCookie(res: Response) {
+  // Clear the new path
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/"
+  });
+  // Clear the old path to prevent zombie cookies
   res.clearCookie("refreshToken", {
     httpOnly: true,
     sameSite: "strict",

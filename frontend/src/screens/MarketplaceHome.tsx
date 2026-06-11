@@ -3,6 +3,7 @@ import { Search, Filter, MapPin, Star, User, MessageCircle, Home as HomeIcon, Be
 import { motion, AnimatePresence } from "motion/react";
 import { createAlert } from "../services/alerts";
 import { fetchCertificationRequests } from "../services/certifications";
+import { useUnreadCount } from "../services/chat";
 
 interface Product {
   id: string;
@@ -14,21 +15,30 @@ interface Product {
   farmer: string;
   rating: number;
   certified: boolean;
+  farmerId?: string;
+  description?: string;
+  farmerPhone?: string;
+  videoUrl?: string | null;
 }
 
 interface MarketplaceHomeMVPProps {
   products?: Product[];
+  isLoading?: boolean;
   onProductClick: (product: Product) => void;
   onNavigate: (screen: string) => void;
+  userName?: string; // new prop for dynamic name
+  initialSearchQuery?: string; // new prop to search for a specific farmer
 }
 
-export default function MarketplaceHomeMVP({ products: externalProducts, onProductClick, onNavigate }: MarketplaceHomeMVPProps) {
+export default function MarketplaceHomeMVP({ products: externalProducts, isLoading = false, onProductClick, onNavigate, userName = "Moussa", initialSearchQuery = "" }: MarketplaceHomeMVPProps) {
   const [activeTab, setActiveTab] = useState("home");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [showAlertDialog, setShowAlertDialog] = useState(false);
   const [alertCrop, setAlertCrop] = useState("Mangues Kent");
   const [alertRegion, setAlertRegion] = useState("Koulikoro");
   const [activeCategory, setActiveCategory] = useState("Tous");
+  
+  const unreadCount = useUnreadCount();
   
   // List of actual quality badges from certifications database
   const [certs, setCerts] = useState<any[]>([]);
@@ -136,7 +146,14 @@ export default function MarketplaceHomeMVP({ products: externalProducts, onProdu
       {/* Header */}
       <div className="bg-white px-6 pt-6 pb-4 border-b border-border">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-gray-900">MAGRO</h1>
+            {/* Logo + App name */}
+        <div className="flex items-center">
+          {/* Logo (static asset) */}
+          <img src={new URL("../assets/MAGRO.png", import.meta.url).href}
+               alt="MAGRO"
+               className="h-10 w-auto object-contain"
+          />
+        </div>
           <button
             onClick={() => setShowAlertDialog(true)}
             className="flex items-center gap-1.5 text-xs font-semibold bg-primary/10 text-primary px-3 py-2 rounded-xl"
@@ -186,7 +203,7 @@ export default function MarketplaceHomeMVP({ products: externalProducts, onProdu
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 pt-4 pb-24">
         <div className="space-y-4">
-          {filteredProducts.length === 0 && searchQuery === "" ? (
+          {isLoading ? (
             Array.from({ length: 3 }).map((_, i) => (
               <motion.div
                 key={`skeleton-${i}`}
@@ -207,6 +224,16 @@ export default function MarketplaceHomeMVP({ products: externalProducts, onProdu
                 </div>
               </motion.div>
             ))
+          ) : filteredProducts.length === 0 ? (
+            <div className="col-span-full py-12 flex flex-col items-center justify-center text-center">
+              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+                <Search className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Aucun produit trouvé</h3>
+              <p className="text-muted-foreground max-w-[250px]">
+                Il n'y a pas de produits disponibles dans la marketplace pour le moment.
+              </p>
+            </div>
           ) : (
             filteredProducts.map((product, index) => {
             const badge = getBadgeForProduct(product);
@@ -365,11 +392,18 @@ export default function MarketplaceHomeMVP({ products: externalProducts, onProdu
               setActiveTab("chat");
               onNavigate("chat");
             }}
-            className={`flex flex-col items-center gap-1 ${
+            className={`relative flex flex-col items-center gap-1 ${
               activeTab === "chat" ? "text-secondary" : "text-muted-foreground"
             }`}
           >
-            <MessageCircle className="w-6 h-6" />
+            <div className="relative">
+              <MessageCircle className="w-6 h-6" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </div>
             <span className="text-xs">Messages</span>
           </button>
           <button

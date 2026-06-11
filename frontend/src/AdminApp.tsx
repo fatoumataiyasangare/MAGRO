@@ -1,21 +1,38 @@
 import { useState } from "react";
 import AdminDashboard from "./screens/AdminDashboard";
-import { ToastProvider, useToast } from "./components/ToastProvider";
+import AdminLoginScreen from "./screens/AdminLoginScreen";
+import { ToastProvider } from "./components/ToastProvider";
 
 function AdminContent() {
-  const [userName] = useState("Modérateur MAGRO");
+  const [adminUser, setAdminUser] = useState<{
+    name: string;
+    role: "MODERATOR" | "SUPER_ADMIN" | "ANALYST";
+  } | null>(null);
+
+  const handleLoginComplete = (role: "MODERATOR" | "SUPER_ADMIN" | "ANALYST") => {
+    setAdminUser({ name: role === "SUPER_ADMIN" ? "Super Admin" : role === "ANALYST" ? "Analyste" : "Modérateur MAGRO", role });
+  };
+
+  const handleLogout = () => {
+    setAdminUser(null);
+  };
 
   const handleNavigate = (screen: string) => {
-    // Dans le back-office, on ne gère pas vraiment de navigation complexe pour l'instant
     if (screen === "logout") {
-      window.location.href = "/";
+      handleLogout();
     }
   };
 
+  if (!adminUser) {
+    return <AdminLoginScreen onLoginComplete={handleLoginComplete} />;
+  }
+
   return (
     <AdminDashboard
-      userName={userName}
+      userName={adminUser.name}
       onNavigate={handleNavigate}
+      propRole={adminUser.role}
+      onLogout={handleLogout}
     />
   );
 }

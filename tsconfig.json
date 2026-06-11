@@ -18,5 +18,5 @@
     "types": ["vite/client"],
     "allowImportingTsExtensions": true
   },
-  "include": ["src"]
+  "include": ["frontend/src"]
 }

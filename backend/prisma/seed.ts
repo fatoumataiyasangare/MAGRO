@@ -64,18 +64,6 @@ async function main() {
     },
   });
 
-  // 4. Création du Régulateur
-  const regulator = await prisma.user.create({
-    data: {
-      phone: '+22370000004',
-      name: 'Modérateur MAGRO',
-      passwordHash,
-      role: UserRole.MODERATOR,
-      region: 'Bamako',
-      isVerified: true,
-    },
-  });
-
   console.log('✅ Utilisateurs créés.');
 
   // 5. Création des Produits (Listings)
@@ -88,7 +76,7 @@ async function main() {
       quantityRemaining: 500,
       unit: 'kg',
       region: 'Sikasso',
-      image: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=800&auto=format&fit=crop&q=60',
+      image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Tomato_je.jpg/800px-Tomato_je.jpg',
       farmerId: farmer1.id,
     },
   });
@@ -102,7 +90,7 @@ async function main() {
       quantityRemaining: 1000,
       unit: 'kg',
       region: 'Koulikoro',
-      image: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=800&auto=format&fit=crop&q=60',
+      image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Onion_on_White.JPG/800px-Onion_on_White.JPG',
       farmerId: farmer2.id,
     },
   });
@@ -116,7 +104,7 @@ async function main() {
       quantityRemaining: 300,
       unit: 'kg',
       region: 'Sikasso',
-      image: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=800&auto=format&fit=crop&q=60',
+      image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Hapus_Mango.jpg/800px-Hapus_Mango.jpg',
       farmerId: farmer1.id,
     },
   });

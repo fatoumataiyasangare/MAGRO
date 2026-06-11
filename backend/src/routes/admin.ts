@@ -33,7 +33,22 @@ router.get("/disputes", requireAuth, requireRole("MODERATOR", "SUPER_ADMIN"), as
     },
     orderBy: { createdAt: "desc" }
   });
-  res.json(disputes);
+  const mappedDisputes = disputes.map(d => ({
+    id: d.id,
+    orderId: d.orderId,
+    openedBy: d.openedBy,
+    reason: d.reason,
+    status: d.status,
+    adminDecision: d.adminDecision,
+    splitRatio: d.splitRatio ? Number(d.splitRatio) : undefined,
+    decisionNote: d.decisionNote,
+    decidedBy: d.decidedBy,
+    createdAt: d.createdAt,
+    orderPrice: d.order.totalPrice,
+    buyerName: d.order.buyer.name,
+    cropName: d.order.listing.title
+  }));
+  res.json(mappedDisputes);
 });
 
 // PATCH /admin/disputes/:id/resolve
@@ -96,7 +111,17 @@ router.get("/verifications", requireAuth, requireRole("MODERATOR", "SUPER_ADMIN"
     },
     orderBy: { createdAt: "desc" }
   });
-  res.json(requests);
+  const mappedRequests = requests.map(r => ({
+    id: r.id,
+    userId: r.userId,
+    documents: r.documents,
+    status: r.status,
+    rejectionReason: r.rejectionReason,
+    createdAt: r.createdAt,
+    userName: r.user.name,
+    userRole: r.user.role
+  }));
+  res.json(mappedRequests);
 });
 
 // PATCH /admin/verifications/:id
@@ -149,7 +174,9 @@ router.patch("/verifications/:id", requireAuth, requireRole("MODERATOR", "SUPER_
 router.get("/stats", requireAuth, requireRole("ANALYST", "MODERATOR", "SUPER_ADMIN"), async (_req: AuthRequest, res) => {
   const totalVolume = await prisma.order.aggregate({
     _sum: { totalPrice: true },
-    where: { status: "DELIVERED" }
+    where: { 
+      status: { notIn: ["CANCELLED", "REJECTED"] }
+    }
   });
 
   const ordersCount = await prisma.order.groupBy({
@@ -246,6 +273,191 @@ router.get("/export", requireAuth, requireRole("ANALYST", "SUPER_ADMIN", "MODERA
   };
   
   res.json(exportData);
+});
+
+// PATCH /admin/disputes/:id/status - Update status (e.g., escalate to Mali authority)
+router.patch("/disputes/:id/status", requireAuth, requireRole("MODERATOR", "SUPER_ADMIN"), async (req: AuthRequest, res) => {
+  const params = z.object({ id: uuidSchema }).safeParse(req.params);
+  if (!params.success) return res.status(400).json({ error: "Invalid ID" });
+
+  const statusSchema = z.object({
+    status: z.enum(["NEW", "IN_REVIEW", "AWAITING_EVIDENCE", "PENDING_REINSPECTION", "RESOLVED"]),
+    decisionNote: z.string().trim().optional()
+  });
+
+  const parseResult = statusSchema.safeParse(req.body);
+  if (!parseResult.success) return res.status(400).json({ error: "Invalid payload" });
+
+  const dispute = await prisma.dispute.update({
+    where: { id: params.data.id },
+    data: {
+      status: parseResult.data.status,
+      ...(parseResult.data.decisionNote && { decisionNote: parseResult.data.decisionNote })
+    }
+  });
+
+  res.json(dispute);
+});
+
+// GET /admin/users
+router.get("/users", requireAuth, requireRole("SUPER_ADMIN"), async (_req: AuthRequest, res) => {
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      role: true,
+      isVerified: true,
+      suspensionUntil: true,
+      createdAt: true
+    },
+    orderBy: { createdAt: "desc" }
+  });
+  res.json(users);
+});
+
+// PATCH /admin/users/:id/suspend
+router.patch("/users/:id/suspend", requireAuth, requireRole("SUPER_ADMIN"), async (req: AuthRequest, res) => {
+  const params = z.object({ id: uuidSchema }).safeParse(req.params);
+  if (!params.success) return res.status(400).json({ error: "Invalid ID" });
+  
+  const bodySchema = z.object({ suspend: z.boolean() });
+  const bodyResult = bodySchema.safeParse(req.body);
+  if (!bodyResult.success) return res.status(400).json({ error: "Invalid payload" });
+
+  const suspensionUntil = bodyResult.data.suspend ? new Date("9999-12-31T23:59:59Z") : null;
+
+  const user = await prisma.user.update({
+    where: { id: params.data.id },
+    data: { suspensionUntil }
+  });
+  
+  res.json({ id: user.id, suspensionUntil: user.suspensionUntil });
+});
+
+// DELETE /admin/users/:id
+router.delete("/users/:id", requireAuth, requireRole("SUPER_ADMIN", "MODERATOR"), async (req: AuthRequest, res) => {
+  const params = z.object({ id: uuidSchema }).safeParse(req.params);
+  if (!params.success) return res.status(400).json({ error: "Invalid ID" });
+
+  const userId = params.data.id;
+
+  // Check for active orders (if orders are in progress, reject deletion)
+  const activeOrders = await prisma.order.count({
+    where: {
+      OR: [{ buyerId: userId }, { listing: { farmerId: userId } }],
+      status: { in: ["EN_ATTENTE", "CONFIRMEE", "PRETE", "DISPUTED", "CONFIRMED", "READY", "SHIPPED"] }
+    }
+  });
+
+  if (activeOrders > 0) {
+    return res.status(400).json({ error: "Impossible de supprimer cet utilisateur : il a des commandes en cours. Veuillez attendre la fin des commandes." });
+  }
+
+  // Cascading delete using a transaction
+  try {
+    await prisma.$transaction([
+      prisma.message.deleteMany({ where: { senderId: userId } }),
+      prisma.conversation.deleteMany({ where: { OR: [{ participant1Id: userId }, { participant2Id: userId }] } }),
+      prisma.favorite.deleteMany({ where: { userId } }),
+      prisma.order.deleteMany({ where: { buyerId: userId } }),
+      prisma.listing.deleteMany({ where: { farmerId: userId } }),
+      prisma.dispute.deleteMany({ where: { OR: [{ openedBy: userId }, { assignedTo: userId }, { decidedBy: userId }] } }),
+      prisma.seasonalContract.deleteMany({ where: { OR: [{ buyerId: userId }, { farmerId: userId }] } }),
+      prisma.verificationRequest.deleteMany({ where: { OR: [{ userId }, { reviewedBy: userId }] } }),
+      prisma.refreshToken.deleteMany({ where: { userId } }),
+      prisma.trustedPair.deleteMany({ where: { OR: [{ buyerId: userId }, { farmerId: userId }] } }),
+      prisma.cooperativeMember.deleteMany({ where: { OR: [{ cooperativeId: userId }, { memberId: userId }] } }),
+      prisma.certification.deleteMany({ where: { OR: [{ farmerId: userId }, { expertId: userId }, { financedByBuyerId: userId }] } }),
+      prisma.availabilityAlert.deleteMany({ where: { buyerId: userId } }),
+      prisma.auditLog.deleteMany({ where: { userId } }),
+      prisma.user.delete({ where: { id: userId } })
+    ]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Cascade delete error:", error);
+    res.status(500).json({ error: "Erreur lors de la suppression en cascade." });
+  }
+});
+
+// GET /admin/delete-requests
+router.get("/delete-requests", requireAuth, requireRole("SUPER_ADMIN"), async (_req: AuthRequest, res) => {
+  const requests = await prisma.accountDeletionRequest.findMany({
+    include: {
+      user: { select: { id: true, name: true, phone: true, role: true } }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+  res.json(requests);
+});
+
+// PATCH /admin/delete-requests/:id/approve
+router.patch("/delete-requests/:id/approve", requireAuth, requireRole("SUPER_ADMIN"), async (req: AuthRequest, res) => {
+  const params = z.object({ id: uuidSchema }).safeParse(req.params);
+  if (!params.success) return res.status(400).json({ error: "Invalid ID" });
+
+  const bodySchema = z.object({ status: z.enum(["APPROVED", "REJECTED"]) });
+  const bodyResult = bodySchema.safeParse(req.body);
+  if (!bodyResult.success) return res.status(400).json({ error: "Invalid payload" });
+
+  const deletionRequest = await prisma.accountDeletionRequest.findUnique({
+    where: { id: params.data.id }
+  });
+
+  if (!deletionRequest) {
+    return res.status(404).json({ error: "Deletion request not found" });
+  }
+
+  await prisma.accountDeletionRequest.update({
+    where: { id: params.data.id },
+    data: { status: bodyResult.data.status }
+  });
+
+  if (bodyResult.data.status === "APPROVED") {
+    // Check active orders
+    const activeOrders = await prisma.order.count({
+      where: {
+        OR: [{ buyerId: deletionRequest.userId }, { listing: { farmerId: deletionRequest.userId } }],
+        status: { in: ["EN_ATTENTE", "CONFIRMEE", "PRETE", "DISPUTED", "CONFIRMED", "READY", "SHIPPED"] }
+      }
+    });
+
+    if (activeOrders > 0) {
+      // Revert status to pending as we can't delete
+      await prisma.accountDeletionRequest.update({
+        where: { id: params.data.id },
+        data: { status: "PENDING" }
+      });
+      return res.status(400).json({ error: "Impossible de supprimer cet utilisateur : il a des commandes en cours." });
+    }
+
+    const userId = deletionRequest.userId;
+    try {
+      await prisma.$transaction([
+        prisma.message.deleteMany({ where: { senderId: userId } }),
+        prisma.conversation.deleteMany({ where: { OR: [{ participant1Id: userId }, { participant2Id: userId }] } }),
+        prisma.favorite.deleteMany({ where: { userId } }),
+        prisma.order.deleteMany({ where: { buyerId: userId } }),
+        prisma.listing.deleteMany({ where: { farmerId: userId } }),
+        prisma.dispute.deleteMany({ where: { OR: [{ openedBy: userId }, { assignedTo: userId }, { decidedBy: userId }] } }),
+        prisma.seasonalContract.deleteMany({ where: { OR: [{ buyerId: userId }, { farmerId: userId }] } }),
+        prisma.verificationRequest.deleteMany({ where: { OR: [{ userId }, { reviewedBy: userId }] } }),
+        prisma.accountDeletionRequest.deleteMany({ where: { userId } }),
+        prisma.refreshToken.deleteMany({ where: { userId } }),
+        prisma.trustedPair.deleteMany({ where: { OR: [{ buyerId: userId }, { farmerId: userId }] } }),
+        prisma.cooperativeMember.deleteMany({ where: { OR: [{ cooperativeId: userId }, { memberId: userId }] } }),
+        prisma.certification.deleteMany({ where: { OR: [{ farmerId: userId }, { expertId: userId }, { financedByBuyerId: userId }] } }),
+        prisma.availabilityAlert.deleteMany({ where: { buyerId: userId } }),
+        prisma.auditLog.deleteMany({ where: { userId } }),
+        prisma.user.delete({ where: { id: userId } })
+      ]);
+    } catch (error) {
+      console.error("Cascade delete error:", error);
+      return res.status(500).json({ error: "Erreur lors de la suppression en cascade." });
+    }
+  }
+
+  res.json({ success: true, status: bodyResult.data.status });
 });
 
 export default router;

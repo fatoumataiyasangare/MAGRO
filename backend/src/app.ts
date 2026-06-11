@@ -12,6 +12,7 @@ import adminRoutes from "./routes/admin.js";
 import certificationRoutes from "./routes/certifications.js";
 import alertRoutes from "./routes/alerts.js";
 import contractRoutes from "./routes/contracts.js";
+import favoriteRoutes from "./routes/favorites.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { requireTrustedOrigin } from "./lib/security.js";
 
@@ -43,7 +44,8 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "same-site" },
   referrerPolicy: { policy: "no-referrer" }
 }));
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cookieParser());
 app.use(cors({
   origin: process.env.CLIENT_ORIGIN?.split(",") ?? ["http://localhost:5173"],
@@ -70,6 +72,7 @@ app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/certifications", certificationRoutes);
 app.use("/api/v1/alerts", alertRoutes);
 app.use("/api/v1/contracts", contractRoutes);
+app.use("/api/v1/favorites", favoriteRoutes);
 
 app.use(errorHandler);
 

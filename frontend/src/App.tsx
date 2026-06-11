@@ -13,6 +13,7 @@ import FarmerDashboard from "./screens/FarmerDashboard";
 import CreateProductScreen from "./screens/CreateProductScreen";
 import MyListingsScreen from "./screens/MyListingsScreen";
 import AdminDashboard from "./screens/AdminDashboard";
+import AdminLoginScreen from "./screens/AdminLoginScreen";
 import ChatScreen from "./screens/ChatScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import OrdersScreen from "./screens/OrdersScreen";
@@ -21,6 +22,7 @@ import ProductionPlanningScreen from "./screens/ProductionPlanningScreen";
 import SubscriptionScreen from "./screens/SubscriptionScreen";
 import SupportScreen from "./screens/SupportScreen";
 import OfflineBanner from "./components/OfflineBanner";
+
 import { ToastProvider, useToast } from "./components/ToastProvider";
 import { Product } from "./screens/MarketplaceHome";
 import {
@@ -29,6 +31,7 @@ import {
   updateRole,
   UserProfile
 } from "./services/auth";
+import { getStoredAccessToken } from "./services/api";
 import {
   createListing,
   deleteListing,
@@ -43,6 +46,7 @@ type Screen =
   | "splash"
   | "welcome"
   | "login"
+  | "admin-login"
   | "signup"
   | "marketplace"
   | "product-detail"
@@ -50,6 +54,7 @@ type Screen =
   | "farmer-dashboard"
   | "create-listing"
   | "my-listings"
+  | "regulator-dashboard"
   | "orders"
   | "chat"
   | "profile"
@@ -67,21 +72,28 @@ function mapListingToProduct(listing: ListingItem): Product {
     price: listing.price,
     quantity: `${listing.quantity} kg disponibles`,
     region: listing.region,
+    farmerId: listing.farmerId || "unknown",
     farmer: listing.farmer?.name || "Votre ferme",
-    rating: 4.7,
-    certified: false
+    farmerPhone: listing.farmer?.phone || undefined,
+    rating: listing.farmer?.rating ? Number(listing.farmer.rating) : 0,
+    certified: listing.farmer?.isVerified || false,
+    videoUrl: listing.videoUrl,
+    description: listing.description
   };
 }
 
 function AppContent() {
   const { showToast } = useToast();
   const [currentScreen, setCurrentScreen] = useState<Screen>("splash");
-  const [userRole, setUserRole] = useState<"buyer" | "farmer" | "regulator" | null>(null);
+  const isAdminRoute = window.location.pathname.startsWith("/admin");
+  const [userRole, setUserRole] = useState<"buyer" | "farmer" | "regulator" | "moderator" | "super_admin" | "analyst" | null>(null);
   const [userName, setUserName] = useState("Moussa");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [listings, setListings] = useState<Product[]>([]);
+  const [isLoadingListings, setIsLoadingListings] = useState(true);
   const [farmerProducts, setFarmerProducts] = useState<Product[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [initialSearchQuery, setInitialSearchQuery] = useState("");
 
   useEffect(() => {
     async function loadSession() {
@@ -89,22 +101,36 @@ function AppContent() {
         const profile = await fetchProfile();
         setUserProfile(profile);
         setUserName(profile.name);
-        setUserRole(profile.role.toLowerCase() as "buyer" | "farmer" | "regulator");
+        const r = profile.role.toLowerCase() as NonNullable<typeof userRole>;
+        setUserRole(r);
+        
+        const isAdmin = ["super_admin", "moderator", "analyst", "regulator"].includes(r);
         
         // Wait for splash screen
         setTimeout(() => {
-          if (profile.role === "BUYER") {
-            setCurrentScreen("marketplace");
-          } else if (profile.role === "FARMER") {
-            setCurrentScreen("farmer-dashboard");
+          if (isAdminRoute) {
+            if (isAdmin) {
+              setCurrentScreen("regulator-dashboard");
+            } else {
+              setCurrentScreen("admin-login");
+            }
           } else {
-            setCurrentScreen("regulator-dashboard");
+            // Un admin sur la route publique accède comme un utilisateur normal (par ex. marketplace)
+            if (r === "farmer") {
+              setCurrentScreen("farmer-dashboard");
+            } else {
+              setCurrentScreen("marketplace");
+            }
           }
         }, 1500);
       } catch {
-        // no active session, go to welcome screen
+        // no active session
         setTimeout(() => {
-          setCurrentScreen("welcome");
+          if (isAdminRoute) {
+            setCurrentScreen("admin-login");
+          } else {
+            setCurrentScreen("welcome");
+          }
         }, 1500);
       }
     }
@@ -113,16 +139,23 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    // Don't load listings on admin portal — no auth token available
+    if (isAdminRoute) return;
+
     async function loadListings() {
+      setIsLoadingListings(true);
       try {
         const data = await fetchListings();
         setListings(data.map(mapListingToProduct));
       } catch {
         // ignore load errors for UI
+      } finally {
+        setIsLoadingListings(false);
       }
     }
 
     async function loadMyListings() {
+      if (!getStoredAccessToken()) return; // guard: no 401 when not logged in
       try {
         const data = await fetchMyListings();
         setFarmerProducts(data.map(mapListingToProduct));
@@ -141,8 +174,19 @@ function AppContent() {
       const profile = await fetchProfile();
       setUserProfile(profile);
       setUserName(profile.name);
-      const role = profile.role.toLowerCase() as "buyer" | "farmer";
+      const role = profile.role.toLowerCase() as NonNullable<typeof userRole>;
       setUserRole(role);
+      
+      // Re-fetch listings now that we are authenticated
+      try {
+        const allListings = await fetchListings();
+        setListings(allListings.map(mapListingToProduct));
+        const myListings = await fetchMyListings();
+        setFarmerProducts(myListings.map(mapListingToProduct));
+      } catch (err) {
+        console.error("Failed to fetch listings on login", err);
+      }
+
       if (role === "farmer") {
         setCurrentScreen("farmer-dashboard");
       } else {
@@ -210,38 +254,46 @@ function AppContent() {
   };
 
   const getHomePage = (): Screen => {
-    if (userRole === "buyer") return "marketplace";
+    if (isAdminRoute) return "regulator-dashboard";
+    
     if (userRole === "farmer") return "farmer-dashboard";
     return "marketplace";
   };
 
   const handleBackToHome = () => {
+    setInitialSearchQuery(""); // clear when navigating normally
     setCurrentScreen(getHomePage());
   };
 
+  const handleFarmerClick = (farmerName: string) => {
+    setInitialSearchQuery(farmerName);
+    setCurrentScreen("marketplace");
+  };
+
   const handleNavigate = (screen: string) => {
-    if (screen === "chat") {
-      setCurrentScreen("chat");
-    } else if (screen === "profile") {
-      setCurrentScreen("profile");
-    } else if (screen === "create-listing") {
-      setCurrentScreen("create-listing");
-    } else if (screen === "my-listings") {
-      setCurrentScreen("my-listings");
-    } else if (screen === "orders") {
-      setCurrentScreen("orders");
-    }
+    if (screen === "chat") setCurrentScreen("chat");
+    else if (screen === "profile") setCurrentScreen("profile");
+    else if (screen === "create-listing") setCurrentScreen("create-listing");
+    else if (screen === "my-listings") setCurrentScreen("my-listings");
+    else if (screen === "orders") setCurrentScreen("orders");
+    else if (screen === "transport") setCurrentScreen("transport");
+    else if (screen === "subscription") setCurrentScreen("subscription");
+    else if (screen === "support") setCurrentScreen("support");
+    else if (screen === "production-planning") setCurrentScreen("production-planning");
   };
 
   const handlePublishProduct = async (product: Product) => {
     try {
+      const productImage = product.image;
+
       const created = await createListing({
         title: product.name,
-        description: "",
+        description: product.description || "",
         price: product.price,
         quantity: parseInt(product.quantity.replace(/\D/g, "")) || 0,
         region: product.region,
-        image: product.image
+        image: productImage,
+        videoUrl: product.videoUrl
       });
 
       setFarmerProducts((current) => [mapListingToProduct(created), ...current]);
@@ -254,10 +306,6 @@ function AppContent() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette annonce ?")) {
-      return;
-    }
-
     try {
       await deleteListing(productId);
       setFarmerProducts((current) => current.filter((p) => p.id !== productId));
@@ -272,7 +320,8 @@ function AppContent() {
     try {
       const updatedListing = await updateListing(product.id, {
         price: product.price,
-        quantity: parseInt(product.quantity.replace(/\D/g, "")) || 0
+        quantity: parseInt(product.quantity.replace(/\D/g, "")) || 0,
+        image: product.image
       });
       const updatedProduct = mapListingToProduct(updatedListing);
       
@@ -293,12 +342,25 @@ function AppContent() {
     await logoutUser();
     setUserRole(null);
     setUserProfile(null);
-    setCurrentScreen("welcome");
+    setCurrentScreen(isAdminRoute ? "admin-login" : "welcome");
+  };
+
+  const handleAdminLoginComplete = async (role: "MODERATOR" | "SUPER_ADMIN" | "ANALYST") => {
+    try {
+      const profile = await fetchProfile();
+      setUserProfile(profile);
+      setUserName(profile.name);
+      setUserRole(role.toLowerCase() as any);
+      setCurrentScreen("regulator-dashboard");
+    } catch {
+      showToast("Erreur lors du chargement du profil", "error");
+    }
   };
 
   return (
     <div className="max-w-md mx-auto h-[100dvh] bg-white shadow-2xl relative overflow-hidden flex flex-col">
       <OfflineBanner />
+
       <AnimatePresence mode="wait">
         {currentScreen === "splash" && (
           <motion.div
@@ -344,6 +406,18 @@ function AppContent() {
           </motion.div>
         )}
 
+        {currentScreen === "admin-login" && (
+          <motion.div
+            key="admin-login"
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -100 }}
+            transition={{ duration: 0.3 }}
+          >
+            <AdminLoginScreen onLoginComplete={handleAdminLoginComplete} />
+          </motion.div>
+        )}
+
         {currentScreen === "signup" && (
           <motion.div
             key="signup"
@@ -355,6 +429,7 @@ function AppContent() {
             <SignupFlow
               onComplete={handleSignupComplete}
               onBack={() => setCurrentScreen("welcome")}
+              onNavigateToLogin={() => setCurrentScreen("login")}
             />
           </motion.div>
         )}
@@ -380,9 +455,12 @@ function AppContent() {
             transition={{ duration: 0.3 }}
           >
             <MarketplaceHome
+              userName={userName}
               products={listings}
+              isLoading={isLoadingListings}
               onProductClick={handleProductClick}
               onNavigate={handleNavigate}
+              initialSearchQuery={initialSearchQuery}
             />
           </motion.div>
         )}
@@ -399,7 +477,10 @@ function AppContent() {
               product={selectedProduct}
               onBack={handleBackToHome}
               onOrder={handleOrderClick}
-              onChat={() => setCurrentScreen("chat")}
+              onChat={() => {
+                setCurrentScreen("chat");
+              }}
+              onFarmerClick={handleFarmerClick}
             />
           </motion.div>
         )}
@@ -480,6 +561,8 @@ function AppContent() {
             <AdminDashboard
               userName={userName}
               onNavigate={handleNavigate}
+              propRole={userRole?.toUpperCase() as "MODERATOR" | "SUPER_ADMIN" | "ANALYST" | undefined}
+              onLogout={handleLogout}
             />
           </motion.div>
         )}
@@ -495,6 +578,7 @@ function AppContent() {
             <ChatScreen
               onBack={handleBackToHome}
               contactName={selectedProduct?.farmer}
+              contactId={selectedProduct?.farmerId}
             />
           </motion.div>
         )}
@@ -508,6 +592,7 @@ function AppContent() {
             transition={{ duration: 0.3 }}
           >
             <ProfileScreen
+              userProfile={userProfile}
               userName={userName}
               userRole={userRole}
               onBack={handleBackToHome}
@@ -581,7 +666,7 @@ function AppContent() {
   );
 }
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "987571438907-83nojnou0ks6qsc5dopu0rf5d4prf7bu.apps.googleusercontent.com";
 
 export default function App() {
   return (

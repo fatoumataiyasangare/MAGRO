@@ -1,3 +1,4 @@
+import { useToast } from "../components/ToastProvider";
 import { ArrowLeft, Check, Shield, Zap, Info, Star } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
@@ -8,6 +9,7 @@ interface SubscriptionScreenProps {
 }
 
 export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) {
+  const { showToast } = useToast();
   const [isPremium, setIsPremium] = useState<boolean>(() => localStorage.getItem("magro_premium_status") === "true");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -23,9 +25,9 @@ export default function SubscriptionScreen({ onBack }: SubscriptionScreenProps) 
     setIsLoading(false);
     
     if (nextVal) {
-      alert("Félicitations ! Votre abonnement Premium MAGRO est activé avec succès via Orange Money.");
+      showToast("Félicitations ! Votre abonnement Premium MAGRO est activé avec succès via Orange Money.", "success");
     } else {
-      alert("Votre abonnement a été rétrogradé au plan Standard.");
+      showToast("Votre abonnement a été rétrogradé au plan Standard.", "success");
     }
   };
 

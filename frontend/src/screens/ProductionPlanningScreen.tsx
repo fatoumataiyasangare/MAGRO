@@ -1,3 +1,4 @@
+import { useToast } from "../components/ToastProvider";
 import { useState } from "react";
 import { ArrowLeft, Plus, Sprout, Sun, Scissors, CalendarDays, TrendingUp, Trash2, Leaf } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -60,50 +61,25 @@ function daysUntil(dateStr: string): number {
 }
 
 const STORAGE_KEY = "magro_crop_plans";
+const MOCK_CLEANUP_KEY = "magro_crop_plans_cleaned";
 
 function loadPlans(): CropPlan[] {
   try {
+    // One-time cleanup of old mock data
+    if (!localStorage.getItem(MOCK_CLEANUP_KEY)) {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (data) {
+        const plans: CropPlan[] = JSON.parse(data);
+        const cleaned = plans.filter(p => !["plan-1", "plan-2", "plan-3"].includes(p.id));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      }
+      localStorage.setItem(MOCK_CLEANUP_KEY, "1");
+    }
+
     const data = localStorage.getItem(STORAGE_KEY);
     if (data) return JSON.parse(data);
   } catch {}
-  // Default mock data
-  const defaults: CropPlan[] = [
-    {
-      id: "plan-1",
-      cropName: "Tomates",
-      variety: "Roma VF",
-      parcelName: "Parcelle Nord",
-      surfaceHa: 2,
-      estimatedYieldKg: 8000,
-      semisDate: "2026-05-01",
-      harvestDate: "2026-08-15",
-      notes: "Arrosage goutte-à-goutte installé"
-    },
-    {
-      id: "plan-2",
-      cropName: "Oignons",
-      variety: "Violet de Galmi",
-      parcelName: "Parcelle Est",
-      surfaceHa: 1.5,
-      estimatedYieldKg: 6000,
-      semisDate: "2026-06-10",
-      harvestDate: "2026-10-20",
-      notes: "Rotation après arachide"
-    },
-    {
-      id: "plan-3",
-      cropName: "Mangues",
-      variety: "Kent",
-      parcelName: "Verger principal",
-      surfaceHa: 3,
-      estimatedYieldKg: 12000,
-      semisDate: "2026-03-01",
-      harvestDate: "2026-07-01",
-      notes: "Contrat saisonnier avec Bramali SA"
-    }
-  ];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
-  return defaults;
+  return [];
 }
 
 function savePlans(plans: CropPlan[]) {
@@ -111,6 +87,7 @@ function savePlans(plans: CropPlan[]) {
 }
 
 export default function ProductionPlanningScreen({ onBack }: ProductionPlanningScreenProps) {
+  const { showToast } = useToast();
   const [plans, setPlans] = useState<CropPlan[]>(loadPlans);
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -128,7 +105,7 @@ export default function ProductionPlanningScreen({ onBack }: ProductionPlanningS
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!variety || !parcelName || !surfaceHa || !semisDate || !harvestDate) {
-      alert("Veuillez remplir tous les champs obligatoires.");
+      showToast("Veuillez remplir tous les champs obligatoires.", "error");
       return;
     }
     const newPlan: CropPlan = {

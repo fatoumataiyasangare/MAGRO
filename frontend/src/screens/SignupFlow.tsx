@@ -2,28 +2,34 @@ import React, { useState } from "react";
 import { Phone, ArrowRight, ArrowLeft, User, Sprout, ShoppingBag } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import logoMagro from "../assets/MAGRO.png";
-import { requestOtp, verifyOtp } from "../services/auth";
+import { requestOtp, verifyOtp, resendOtp } from "../services/auth";
 import { GoogleLogin } from "@react-oauth/google";
-import { handleGoogleCredential } from "../services/googleAuthService";
+import { handleGoogleSignup } from "../services/googleAuthService";
+import { getGoogleClientId } from "../services/googleAuthService";
 import { validateMalianPhone } from "../services/phoneValidation";
+import { PolicyModal, type PolicyType } from "../components/PolicyModal";
 
 interface SignupFlowProps {
   onComplete: (role: "buyer" | "farmer") => void;
   onBack: () => void;
+  onNavigateToLogin?: () => void;
 }
 
 type SignupStep = "role" | "info" | "otp";
 
-export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
+export default function SignupFlow({ onComplete, onBack, onNavigateToLogin }: SignupFlowProps) {
   const [step, setStep] = useState<SignupStep>("role");
   const [selectedRole, setSelectedRole] = useState<"buyer" | "farmer" | null>(null);
   const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [buyerType, setBuyerType] = useState("individual");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [countdown, setCountdown] = useState(0);
+
+  const [policyModal, setPolicyModal] = useState<PolicyType>(null);
 
   // Gérer le compte à rebours
   React.useEffect(() => {
@@ -59,35 +65,63 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
     try {
       await requestOtp(formattedPhone, true);
       setStep("otp");
-      setCountdown(60); // 60 secondes
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Impossible d'envoyer le code OTP");
+      setCountdown(60);
+    } catch (error: any) {
+      setErrorMessage(error instanceof Error ? error.message : "Erreur lors de l'envoi de l'OTP");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleOtpChange = async (index: number, value: string) => {
-    if (value.length > 1) return;
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
+    const numericValue = value.replace(/[^0-9]/g, "");
+    
+    if (!numericValue) {
+      const newOtp = [...otp];
+      newOtp[index] = "";
+      setOtp(newOtp);
+      return;
+    }
 
-    if (value && index < 5) {
+    const newOtp = [...otp];
+    if (numericValue.length > 1) {
+      // Handle paste
+      for (let i = 0; i < numericValue.length && index + i < 6; i++) {
+        newOtp[index + i] = numericValue[i];
+      }
+      setOtp(newOtp);
+      const nextIndex = Math.min(index + numericValue.length, 5);
       const inputs = document.querySelectorAll<HTMLInputElement>(".otp-input-signup");
-      inputs[index + 1]?.focus();
+      inputs[nextIndex]?.focus();
+    } else {
+      // Handle single character typing
+      newOtp[index] = numericValue;
+      setOtp(newOtp);
+      if (index < 5) {
+        const inputs = document.querySelectorAll<HTMLInputElement>(".otp-input-signup");
+        inputs[index + 1]?.focus();
+      }
     }
 
     if (newOtp.every((digit) => digit !== "")) {
       setErrorMessage("");
       setIsLoading(true);
       try {
-        await verifyOtp(phoneNumber, newOtp.join(""));
+        await verifyOtp(phoneNumber, newOtp.join(""), fullName, selectedRole!);
         // Store the name in localStorage for profile
         localStorage.setItem("magro_user_name", fullName);
+        if (selectedRole === "buyer") {
+          localStorage.setItem("magro_buyer_subtype", buyerType);
+        }
+        // Clear OTP fields on success
+        setOtp(["", "", "", "", "", ""]);
         setTimeout(() => onComplete(selectedRole!), 500);
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Code de vérification invalide");
+        // Reset OTP fields on error
+        setOtp(["", "", "", "", "", ""]);
+        const inputs = document.querySelectorAll<HTMLInputElement>(".otp-input-signup");
+        inputs[0]?.focus();
       } finally {
         setIsLoading(false);
       }
@@ -101,17 +135,31 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
     }
   };
 
-  const handleGoogleSuccess = (credentialResponse: any) => {
+  const handleGoogleSuccess = async (credentialResponse: any) => {
     if (credentialResponse.credential) {
+      setIsLoading(true);
+      setErrorMessage("");
       try {
-        handleGoogleCredential(credentialResponse.credential);
-        localStorage.setItem("magro_user_name", fullName || "Utilisateur Google");
+        // Envoi du credential, du rôle sélectionné et (optionnellement) du numéro s'il y est
+        const userProfile = await handleGoogleSignup(credentialResponse.credential, selectedRole!, phoneNumber || undefined);
+        localStorage.setItem("magro_user_name", userProfile.name || fullName || "Utilisateur Google");
         setTimeout(() => onComplete(selectedRole!), 500);
-      } catch (error) {
-        setErrorMessage("Erreur lors de l'authentification Google.");
+      } catch (error: any) {
+        if (error.message) {
+          setErrorMessage(error.message);
+        } else {
+          setErrorMessage("Erreur lors de l'authentification Google.");
+        }
+      } finally {
+        setIsLoading(false);
       }
     }
   };
+
+
+
+
+  const googleClientId = getGoogleClientId();
 
   const handleStepBack = () => {
     if (step === "otp") setStep("info");
@@ -124,8 +172,8 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
 
   return (
     <div className="h-screen bg-white flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto flex flex-col justify-center px-6 py-8 max-w-md mx-auto w-full">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="my-auto">
+      <div className="flex-1 overflow-y-auto flex flex-col justify-start pt-4 px-6 pb-8 max-w-md mx-auto w-full">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
 
           {/* Back + Step indicator */}
           <div className="flex items-center justify-between mb-6">
@@ -249,23 +297,51 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
                   </div>
                 </div>
 
+                {selectedRole === "buyer" && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Type d'acheteur</label>
+                    <div className="relative">
+                      <ShoppingBag className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+                      <select
+                        value={buyerType}
+                        onChange={(e) => setBuyerType(e.target.value)}
+                        className="w-full pl-12 pr-4 py-4 bg-white border-2 border-border rounded-xl focus:outline-none focus:border-primary text-lg appearance-none"
+                      >
+                        <option value="individual">Particulier</option>
+                        <option value="trader">Commerçant / Grossiste</option>
+                        <option value="restaurant">Restaurateur / Hôtelier</option>
+                        <option value="institution">Cantine / Institution</option>
+                        <option value="industry">Industriel / Transformateur</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-start gap-3 mt-4">
                   <input
                     type="checkbox"
                     id="terms"
                     checked={termsAccepted}
                     onChange={(e) => setTermsAccepted(e.target.checked)}
-                    className="mt-1 w-5 h-5 rounded border-gray-300 text-secondary focus:ring-secondary cursor-pointer"
+                    className="mt-1 w-5 h-5 rounded border-gray-300 text-secondary focus:ring-secondary cursor-pointer flex-shrink-0"
                   />
-                  <label htmlFor="terms" className="text-sm text-muted-foreground cursor-pointer">
+                  <label htmlFor="terms" className="text-sm text-muted-foreground cursor-pointer leading-relaxed">
                     J'accepte les{" "}
-                    <a href="/terms" target="_blank" className="text-secondary hover:underline">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPolicyModal("terms"); }}
+                      className="text-secondary font-medium hover:underline cursor-pointer"
+                    >
                       Conditions d'utilisation
-                    </a>{" "}
-                    et la{" "}
-                    <a href="/privacy" target="_blank" className="text-secondary hover:underline">
+                    </button>
+                    {" "}et la{" "}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPolicyModal("privacy"); }}
+                      className="text-secondary font-medium hover:underline cursor-pointer"
+                    >
                       Politique de confidentialité
-                    </a>
+                    </button>
                   </label>
                 </div>
 
@@ -278,7 +354,23 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
                   {!isLoading && <ArrowRight className="w-5 h-5" />}
                 </button>
 
-                {errorMessage && <p className="text-sm text-destructive text-center">{errorMessage}</p>}
+                {errorMessage && (
+                  <div className="text-sm text-destructive text-center">
+                    {errorMessage.includes("Veuillez vous connecter") ? (
+                      <p>
+                        Un compte existe déjà avec ce numéro.{" "}
+                        <button 
+                          onClick={onNavigateToLogin || onBack} 
+                          className="underline font-semibold hover:text-destructive/80 transition-colors cursor-pointer"
+                        >
+                          Veuillez vous connecter
+                        </button>
+                      </p>
+                    ) : (
+                      <p>{errorMessage}</p>
+                    )}
+                  </div>
+                )}
 
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
@@ -289,18 +381,20 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
                   </div>
                 </div>
 
-                {/* Vrai bouton Google OAuth */}
+                {/* Google Auth */}
                 <div className="flex justify-center">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => setErrorMessage("Échec de la connexion Google. Réessayez.")}
-                    theme="outline"
-                    size="large"
-                    width="350"
-                    text="signup_with"
-                    shape="pill"
-                    locale="fr"
-                  />
+                  {googleClientId && (
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={() => setErrorMessage("Échec de la connexion Google. Réessayez.")}
+                      theme="outline"
+                      size="large"
+                      width="350"
+                      text="signup_with"
+                      shape="pill"
+                      locale="fr"
+                    />
+                  )}
                 </div>
               </motion.div>
             )}
@@ -313,7 +407,7 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
               >
-                <div className="text-center mb-8">
+                <div className="text-center mb-6">
                   <h2 className="text-2xl font-bold mb-2">Code de vérification</h2>
                   <p className="text-muted-foreground text-sm">Code envoyé au {phoneNumber}</p>
                 </div>
@@ -336,6 +430,37 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
 
                 {errorMessage && <p className="text-sm text-destructive text-center mb-4">{errorMessage}</p>}
 
+                <button
+                  onClick={async () => {
+                    if (otp.some(d => d === "")) {
+                      setErrorMessage("Veuillez saisir les 6 chiffres du code");
+                      return;
+                    }
+                    setErrorMessage("");
+                    setIsLoading(true);
+                    try {
+                      await verifyOtp(phoneNumber, otp.join(""), fullName, selectedRole!);
+                      localStorage.setItem("magro_user_name", fullName);
+                      if (selectedRole === "buyer") {
+                        localStorage.setItem("magro_buyer_subtype", buyerType);
+                      }
+                      setOtp(["", "", "", "", "", ""]);
+                      setTimeout(() => onComplete(selectedRole!), 500);
+                    } catch (error) {
+                      setErrorMessage(error instanceof Error ? error.message : "Code de vérification invalide");
+                      setOtp(["", "", "", "", "", ""]);
+                      const inputs = document.querySelectorAll<HTMLInputElement>(".otp-input-signup");
+                      inputs[0]?.focus();
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  disabled={isLoading}
+                  className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-bold text-lg mb-6 shadow-[0_4px_14px_0_rgb(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-1 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  {isLoading ? "Validation..." : "Valider"}
+                </button>
+
                 <div className="text-center mb-6">
                   {countdown > 0 ? (
                     <p className="text-sm text-muted-foreground">
@@ -343,10 +468,25 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
                     </p>
                   ) : (
                     <button 
-                      onClick={() => { setCountdown(60); requestOtp(phoneNumber); }}
-                      className="text-secondary text-sm font-semibold hover:underline"
+                      onClick={async () => {
+                        setErrorMessage("");
+                        setIsLoading(true);
+                        try {
+                          await resendOtp(phoneNumber);
+                          setCountdown(60);
+                          setOtp(["", "", "", "", "", ""]);
+                          const inputs = document.querySelectorAll<HTMLInputElement>(".otp-input-signup");
+                          inputs[0]?.focus();
+                        } catch (error) {
+                          setErrorMessage(error instanceof Error ? error.message : "Erreur lors du renvoi du code");
+                        } finally {
+                          setIsLoading(false);
+                        }
+                      }}
+                      disabled={isLoading}
+                      className="text-secondary text-sm font-semibold hover:underline disabled:opacity-50"
                     >
-                      Renvoyer le code
+                      {isLoading ? "Envoi en cours..." : "Renvoyer le code"}
                     </button>
                   )}
                 </div>
@@ -359,6 +499,9 @@ export default function SignupFlow({ onComplete, onBack }: SignupFlowProps) {
           </AnimatePresence>
         </motion.div>
       </div>
+
+      {/* Policy Modal */}
+      <PolicyModal type={policyModal} onClose={() => setPolicyModal(null)} />
     </div>
   );
 }
